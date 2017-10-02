@@ -26,14 +26,21 @@
 ;; <=
 
 ;; @@
+; Must one-hot kmers
+
+(defn get-kmers [k]
+  (fn [sequence]
+    (distinct
+      (partition k 1 sequence))))
+
+(def seq1 "ACTGGGCTAATACCAATTAACAGATTGAGATTTAATGATGACAATAGA")
+(def seq2 "TTTAAAAAGTAATACCAATTAACAGATTGAGATTTAATGATGACAATAGAACTGACAATACA")
+
+
 
 ;; @@
-;; ->
-;;; I&#x27;m using TensorFlow version: 1.3.0
-;;; 
-;; <-
 ;; =>
-;;; {"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}
+;;; {"type":"html","content":"<span class='clj-var'>#&#x27;harmonious-drylands/seq2</span>","value":"#'harmonious-drylands/seq2"}
 ;; <=
 
 ;; @@
