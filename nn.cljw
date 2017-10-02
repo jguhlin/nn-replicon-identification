@@ -15,7 +15,8 @@
   (:require [gorilla-plot.core :as plot]
             [clojure.core.matrix :as mat]
             [clojure.core.reducers :as r]
-            [clj-fuzzy.metrics :as fm])
+            [clj-fuzzy.metrics :as fm]
+            [clojure.math.numeric-tower :as math])
   (:import org.tensorflow.TensorFlow))
 
 (mat/set-current-implementation :vectorz)
@@ -26,21 +27,80 @@
 ;; <=
 
 ;; @@
-; Must one-hot kmers
+(def k 9)
+(def space (math/expt 5 k))
+
+; Use base 5, 0 is \N, etc...
+;(Integer/toString 1953124 5)
+; Build sparse-array 
 
 (defn get-kmers [k]
   (fn [sequence]
     (distinct
       (partition k 1 sequence))))
 
+(defn convert-char-to-number [c]
+  (case c 
+    \N 0
+    \A 1
+    \C 2
+    \T 3
+    \G 4
+    0))
+
+(defn convert-kmer [kmer]
+  (new BigInteger (apply str (map convert-char-to-number kmer)) 5))
+
 (def seq1 "ACTGGGCTAATACCAATTAACAGATTGAGATTTAATGATGACAATAGA")
 (def seq2 "TTTAAAAAGTAATACCAATTAACAGATTGAGATTTAATGATGACAATAGAACTGACAATACA")
-
 
 
 ;; @@
 ;; =>
 ;;; {"type":"html","content":"<span class='clj-var'>#&#x27;harmonious-drylands/seq2</span>","value":"#'harmonious-drylands/seq2"}
+;; <=
+
+;; @@
+(class space)
+;; @@
+;; =>
+;;; {"type":"html","content":"<span class='clj-class'>java.lang.Long</span>","value":"java.lang.Long"}
+;; <=
+
+;; @@
+(map convert-kmer ((get-kmers k) seq2))
+;; @@
+;; =>
+;;; {"type":"list-like","open":"<span class='clj-lazy-seq'>(</span>","close":"<span class='clj-lazy-seq'>)</span>","separator":" ","items":[{"type":"html","content":"<span class='clj-unkown'>1457034</span>","value":"1457034"},{"type":"html","content":"<span class='clj-unkown'>1425798</span>","value":"1425798"},{"type":"html","content":"<span class='clj-unkown'>1269616</span>","value":"1269616"},{"type":"html","content":"<span class='clj-unkown'>488706</span>","value":"488706"},{"type":"html","content":"<span class='clj-unkown'>490408</span>","value":"490408"},{"type":"html","content":"<span class='clj-unkown'>498916</span>","value":"498916"},{"type":"html","content":"<span class='clj-unkown'>541457</span>","value":"541457"},{"type":"html","content":"<span class='clj-unkown'>754162</span>","value":"754162"},{"type":"html","content":"<span class='clj-unkown'>1817686</span>","value":"1817686"},{"type":"html","content":"<span class='clj-unkown'>1275931</span>","value":"1275931"},{"type":"html","content":"<span class='clj-unkown'>520283</span>","value":"520283"},{"type":"html","content":"<span class='clj-unkown'>648293</span>","value":"648293"},{"type":"html","content":"<span class='clj-unkown'>1288341</span>","value":"1288341"},{"type":"html","content":"<span class='clj-unkown'>582331</span>","value":"582331"},{"type":"html","content":"<span class='clj-unkown'>958532</span>","value":"958532"},{"type":"html","content":"<span class='clj-unkown'>886411</span>","value":"886411"},{"type":"html","content":"<span class='clj-unkown'>525809</span>","value":"525809"},{"type":"html","content":"<span class='clj-unkown'>675921</span>","value":"675921"},{"type":"html","content":"<span class='clj-unkown'>1426483</span>","value":"1426483"},{"type":"html","content":"<span class='clj-unkown'>1273043</span>","value":"1273043"},{"type":"html","content":"<span class='clj-unkown'>505844</span>","value":"505844"},{"type":"html","content":"<span class='clj-unkown'>576096</span>","value":"576096"},{"type":"html","content":"<span class='clj-unkown'>927359</span>","value":"927359"},{"type":"html","content":"<span class='clj-unkown'>730546</span>","value":"730546"},{"type":"html","content":"<span class='clj-unkown'>1699608</span>","value":"1699608"},{"type":"html","content":"<span class='clj-unkown'>685543</span>","value":"685543"},{"type":"html","content":"<span class='clj-unkown'>1474593</span>","value":"1474593"},{"type":"html","content":"<span class='clj-unkown'>1513591</span>","value":"1513591"},{"type":"html","content":"<span class='clj-unkown'>1708581</span>","value":"1708581"},{"type":"html","content":"<span class='clj-unkown'>730408</span>","value":"730408"},{"type":"html","content":"<span class='clj-unkown'>1698919</span>","value":"1698919"},{"type":"html","content":"<span class='clj-unkown'>682096</span>","value":"682096"},{"type":"html","content":"<span class='clj-unkown'>1457358</span>","value":"1457358"},{"type":"html","content":"<span class='clj-unkown'>1427419</span>","value":"1427419"},{"type":"html","content":"<span class='clj-unkown'>1277721</span>","value":"1277721"},{"type":"html","content":"<span class='clj-unkown'>529232</span>","value":"529232"},{"type":"html","content":"<span class='clj-unkown'>693036</span>","value":"693036"},{"type":"html","content":"<span class='clj-unkown'>1512056</span>","value":"1512056"},{"type":"html","content":"<span class='clj-unkown'>1700908</span>","value":"1700908"},{"type":"html","content":"<span class='clj-unkown'>692041</span>","value":"692041"},{"type":"html","content":"<span class='clj-unkown'>1507084</span>","value":"1507084"},{"type":"html","content":"<span class='clj-unkown'>1676046</span>","value":"1676046"},{"type":"html","content":"<span class='clj-unkown'>567731</span>","value":"567731"},{"type":"html","content":"<span class='clj-unkown'>885532</span>","value":"885532"},{"type":"html","content":"<span class='clj-unkown'>521413</span>","value":"521413"},{"type":"html","content":"<span class='clj-unkown'>653944</span>","value":"653944"},{"type":"html","content":"<span class='clj-unkown'>1316596</span>","value":"1316596"},{"type":"html","content":"<span class='clj-unkown'>723607</span>","value":"723607"},{"type":"html","content":"<span class='clj-unkown'>1664911</span>","value":"1664911"},{"type":"html","content":"<span class='clj-unkown'>512056</span>","value":"512056"},{"type":"html","content":"<span class='clj-unkown'>607158</span>","value":"607158"},{"type":"html","content":"<span class='clj-unkown'>1082666</span>","value":"1082666"},{"type":"html","content":"<span class='clj-unkown'>1507082</span>","value":"1507082"},{"type":"html","content":"<span class='clj-unkown'>1676036</span>","value":"1676036"}],"value":"(1457034 1425798 1269616 488706 490408 498916 541457 754162 1817686 1275931 520283 648293 1288341 582331 958532 886411 525809 675921 1426483 1273043 505844 576096 927359 730546 1699608 685543 1474593 1513591 1708581 730408 1698919 682096 1457358 1427419 1277721 529232 693036 1512056 1700908 692041 1507084 1676046 567731 885532 521413 653944 1316596 723607 1664911 512056 607158 1082666 1507082 1676036)"}
+;; <=
+
+;; @@
+space
+;; @@
+;; =>
+;;; {"type":"html","content":"<span class='clj-long'>1953125</span>","value":"1953125"}
+;; <=
+
+;; **
+;;; ## TF Fn's
+;; **
+
+;; @@
+(defn tf-graph []
+  (new org.tensorflow.Graph))
+
+(defn tf-session [graph]
+  (new org.tensorflow.Session graph))
+;; @@
+;; =>
+;;; {"type":"html","content":"<span class='clj-var'>#&#x27;harmonious-drylands/tf-session</span>","value":"#'harmonious-drylands/tf-session"}
+;; <=
+
+;; @@
+(tf-session (tf-graph))
+;; @@
+;; =>
+;;; {"type":"html","content":"<span class='clj-unkown'>#object[org.tensorflow.Session 0x41f2f2d1 &quot;org.tensorflow.Session@41f2f2d1&quot;]</span>","value":"#object[org.tensorflow.Session 0x41f2f2d1 \"org.tensorflow.Session@41f2f2d1\"]"}
 ;; <=
 
 ;; @@

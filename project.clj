@@ -8,5 +8,6 @@
 		 [org.tensorflow/tensorflow "1.3.0"]
 		 [net.mikera/core.matrix "0.61.0"]
 		 [net.mikera/vectorz-clj "0.47.0"]
-                 [clj-fuzzy "0.4.1"]
+		 [org.clojure/math.numeric-tower "0.0.4"]
+     [clj-fuzzy "0.4.1"]
 		])
