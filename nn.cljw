@@ -1,0 +1,41 @@
+;; gorilla-repl.fileformat = 1
+
+;; **
+;;; # Gorilla REPL
+;;; 
+;;; Welcome to gorilla :-)
+;;; 
+;;; Shift + enter evaluates code. Hit alt+g twice in quick succession or click the menu icon (upper-right corner) for more commands ...
+;;; 
+;;; It's a good habit to run each worksheet in its own namespace: feel free to use the declaration we've provided below if you'd like.
+;; **
+
+;; @@
+(ns harmonious-drylands
+  (:require [gorilla-plot.core :as plot]
+            [clojure.core.matrix :as mat]
+            [clojure.core.reducers :as r]
+            [clj-fuzzy.metrics :as fm])
+  (:import org.tensorflow.TensorFlow))
+
+(mat/set-current-implementation :vectorz)
+(use 'clojure.core.matrix.operators)
+;; @@
+;; =>
+;;; {"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}
+;; <=
+
+;; @@
+
+;; @@
+;; ->
+;;; I&#x27;m using TensorFlow version: 1.3.0
+;;; 
+;; <-
+;; =>
+;;; {"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}
+;; <=
+
+;; @@
+
+;; @@
