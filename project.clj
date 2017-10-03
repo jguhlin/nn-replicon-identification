@@ -11,4 +11,6 @@
 		 [org.clojure/math.numeric-tower "0.0.4"]
      [clj-fuzzy "0.4.1"]
      [thinktopic/cortex "0.9.21"]
+     [org.clojars.ds923y/nd4clj "0.1.1-SNAPSHOT"]
+     [thinktopic/experiment "0.9.21"]
 		])
