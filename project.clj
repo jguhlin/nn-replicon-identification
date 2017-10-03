@@ -10,4 +10,5 @@
 		 [net.mikera/vectorz-clj "0.47.0"]
 		 [org.clojure/math.numeric-tower "0.0.4"]
      [clj-fuzzy "0.4.1"]
+     [thinktopic/cortex "0.9.21"]
 		])
