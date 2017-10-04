@@ -10,9 +10,11 @@
             [cortex.optimize.adam :as adam]
             [cortex.metrics :as metrics]
             [cortex.util :as util]
+            [iota :as iota]
             [cortex.optimize.adam :as adam]
             [cortex.experiment.train :as experiment-train]
             [cortex.nn.execute :as execute]
+            [criterium.core :as crit]
             [clojure.math.numeric-tower :as math]
             [biotools.fasta :as fasta]))
             
@@ -20,7 +22,7 @@
 
 (mat/set-current-implementation :vectorz)
 
-(def k 5)
+(def k 7)
 (def space (math/expt 5 k))
 
 ; Use base 5, 0 is \N, etc...
@@ -30,7 +32,7 @@
 (defn get-kmers [k]
   (fn [sequence]
     (distinct
-      (partition k 1 sequence))))
+      (partition k sequence)))) ; Could move sliding window by 1
 
 (defn convert-char-to-number [c]
   (case c 
@@ -55,12 +57,13 @@
                (map 
                  convert-kmer
                  ((get-kmers k) sequence)))]
-    (mat/sparse-matrix
-      (for [i (range 0 space)]
-        (get data i 0)))))
+    (mat/sparse-array
+      (map 
+        (fn [x] 
+          (get data x 0.0))
+        (range 0 space)))))
 
-
-; Convert into a sequence of 1000bp
+; Convert into a sequence of 10 00bp
 ; This is for running the net, not training
 (defn convert-sequences [seq-to-analyze]
   (let [small-seq (interleave
@@ -70,32 +73,36 @@
                       (partition 1000 seq-to-analyze)))]
     small-seq))
 
-(defn training-set [seq-to-analyze label]
+(defrecord Training [data label])
+
+(defn generate-training-set [seq-to-analyze label]
   (let [seqs (partition 
                1000
-               800 ;(Math/floor (* k 1.8)) ; Use more aggressive partitioning for better training?
+                200 ; Can use more aggressive partitioning for better training?
                seq-to-analyze)]
-    (r/foldcat
-      (r/map
-        (fn [x] {:data (convert-sequence x) :label label})
-        seqs))))
+      (map 
+        (fn [x] (cons label (convert-sequence x)))
+        seqs)))
 
 (def categories 
-  {:Main   [1.0 0.0 0.0 0.0]
-   :pSymA  [0.0 1.0 0.0 0.0]
-   :pSymB  [0.0 0.0 1.0 0.0]
-   :others [0.0 0.0 0.0 1.0]})
+  {:Main   [1.0 0.0 0.0 0.0 0.0]
+   :pSymA  [0.0 1.0 0.0 0.0 0.0]
+   :pSymB  [0.0 0.0 1.0 0.0 0.0]
+   :others [0.0 0.0 0.0 1.0 0.0]
+   :acc    [0.0 0.0 0.0 0.0 1.0]})
 
 (defn create-training-set-from-fasta-file [file]
-  (with-open [rdr (clojure.java.io/reader file)]
-    (apply concat
-      (doall
-        (map 
-          (fn [x]
-            (training-set 
-              (clojure.string/upper-case (:seq x))
-              (get categories (keyword (:id x)))))
-          (fasta/parse rdr))))))
+  (with-open [rdr (clojure.java.io/reader file)
+              data (clojure.java.io/writer "data.tsv" :append true)]
+    (doseq [line (apply concat
+                   (map 
+                     (fn [x]
+                       (generate-training-set 
+                         (clojure.string/upper-case (:seq x))
+                         (keyword (:id x))))
+                     (fasta/parse rdr)))]
+      (.write data (clojure.string/join "\t" line))
+      (.write data "\n"))))
 
 (def params
   {:test-ds-size      5000
@@ -108,7 +115,7 @@
 ;  [(layers/input 1000 1 1 :id :data)
 ;   (layers/convolutional space 0 1 20)
 ;   (layers/max-pooling 2 0 2)
-;   (layers/dropout 0.9)
+;   (layers/dropout 0(defn- to-epoch-seq-fn  [item epoch-count]  (if-not (fn? item)    (parallel/create-next-item-fn     (let [retval (if (map? (first item))                    (repeat item)                    item)]       (if epoch-count         (take epoch-count retval)         retval)))    (create-n-callable-fn item epoch-count))).9)
 ;   (layers/relu)
 ;   (layers/convolutional 5 0 1 50)
 ;   (layers/max-pooling 2 0 2)
@@ -135,7 +142,10 @@
      ;     (layers/batch-normalization)
      ;     (layers/linear 50)
      ;     (layers/dropout 0.5)
-     (layers/linear (Math/ceil (/ space 32)))
+;     (layers/dropout 0.9)
+     (layers/linear (Math/ceil (/ space 64)))
+;     (layers/relu)
+;     (layers/dropout 0.9)
      (layers/linear 4)
      (layers/softmax :id :label)]
    network/linear-network))
@@ -165,29 +175,43 @@
 
 ;println "Generating Training Set")
 
-(def train-orig (create-training-set-from-fasta-file "data-files/Rm1021.final.fasta"))
+;(crit/quick-bench)
+;  (create-training-set-from-fasta-file "data-files/Rm1021.final.fasta"))
 
+;(def train-orig (create-training-set-from-fasta-file "data-files/Rm1021.final.fasta"))
 
+;(println (first train-orig))
+;(println (last train-orig))
 ;(println (count train-orig))
 
-(println (first train-orig))
-(println (reduce + (map mat/esum (map :data train-orig))))
+;(println (first train-orig))
+;(println (reduce + (map mat/esum (map :data train-orig))))
 ;(println (map :label train-orig))
 
 ;(println train-orig2)
 
 ;(System/exit 0)
 
+
+(def training-data-file (iota/vec "data.tsv"))
+
+; Can be called forever
+(def train-orig []
+  (let [r (clojure.string/split #"\t" (rand-nth training-data-file))]
+    (->Training (rest r) (get categories (first r) [0.0 0.0 0.0 1.0 0.0]))))
+  
 (defn -main []
-  (try
-    (def trained
-      (experiment-train/train-n 
-        nn
-        train-orig
-        train-orig
-        :batch-size 1000 :epoch-count 500))
-    (catch Exception e
-      (println e)))
+  (let [[test-ds train-ds] (split-at 500 (shuffle train-orig))]
+;(create-training-set-from-fasta-file "data-files/Rm1021.final.fasta")))]
+    (try
+      (def trained
+        (experiment-train/train-n 
+          nn
+          train-ds
+          test-ds
+          :batch-size 500 :epoch-count 500))
+      (catch Exception e
+        (println e))))
   
   (println (execute/run trained [{:data (convert-sequence kh35c-main)}])))
                                  

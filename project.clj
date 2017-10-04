@@ -11,7 +11,9 @@
                  [net.mikera/vectorz-clj "0.47.0"]
                  [org.clojure/math.numeric-tower "0.0.4"]
                  [clj-fuzzy "0.4.1"]
+                 [criterium "0.4.4"]
                  [biotools "0.1.1-b1"]
+                 [iota "1.1.3"]
                  [thinktopic/cortex "0.9.21"]
                  [org.clojars.ds923y/nd4clj "0.1.1-SNAPSHOT"]
                  [thinktopic/experiment "0.9.21"]])
