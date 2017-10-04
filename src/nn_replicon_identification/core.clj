@@ -73,7 +73,7 @@
 (defn training-set [seq-to-analyze label]
   (let [seqs (partition 
                1000
-               1000 ;(Math/floor (* k 1.8)) ; Use more aggressive partitioning for better training?
+               800 ;(Math/floor (* k 1.8)) ; Use more aggressive partitioning for better training?
                seq-to-analyze)]
     (r/foldcat
       (r/map
@@ -135,8 +135,7 @@
      ;     (layers/batch-normalization)
      ;     (layers/linear 50)
      ;     (layers/dropout 0.5)
-     (layers/linear 100)
-     (layers/linear 50)
+     (layers/linear (Math/ceil (/ space 32)))
      (layers/linear 4)
      (layers/softmax :id :label)]
    network/linear-network))
@@ -186,7 +185,7 @@
         nn
         train-orig
         train-orig
-        :batch-size 5000 :epoch-count 500))
+        :batch-size 1000 :epoch-count 500))
     (catch Exception e
       (println e)))
   
