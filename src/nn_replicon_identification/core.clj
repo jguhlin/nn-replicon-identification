@@ -11,14 +11,13 @@
             [cortex.metrics :as metrics]
             [cortex.util :as util]
             [iota :as iota]
+;            [clj-btable.core :as btable]
             [cortex.optimize.adam :as adam]
             [cortex.experiment.train :as experiment-train]
             [cortex.nn.execute :as execute]
             [criterium.core :as crit]
             [clojure.math.numeric-tower :as math]
             [biotools.fasta :as fasta]))
-            
-            
 
 (mat/set-current-implementation :vectorz)
 
@@ -32,7 +31,7 @@
 (defn get-kmers [k]
   (fn [sequence]
     (distinct
-      (partition k sequence)))) ; Could move sliding window by 1
+      (partition k 1 sequence)))) ; Could move sliding window by 1
 
 (defn convert-char-to-number [c]
   (case c 
@@ -78,7 +77,7 @@
 (defn generate-training-set [seq-to-analyze label]
   (let [seqs (partition 
                1000
-                200 ; Can use more aggressive partitioning for better training?
+               1000 ; Can use smaller numbers to make a sliding window -- But file gets too big -- Need a way to store sparse matrices
                seq-to-analyze)]
       (map 
         (fn [x] (cons label (convert-sequence x)))
@@ -103,6 +102,8 @@
                      (fasta/parse rdr)))]
       (.write data (clojure.string/join "\t" line))
       (.write data "\n"))))
+
+; Tried to use btable but deps are too outdated...
 
 (def params
   {:test-ds-size      5000
@@ -193,13 +194,15 @@
 ;(System/exit 0)
 
 
-(def training-data-file (iota/vec "data.tsv"))
+;(def training-data-file (iota/vec "data.tsv"))
 
 ; Can be called forever
-(def train-orig []
-  (let [r (clojure.string/split #"\t" (rand-nth training-data-file))]
-    (->Training (rest r) (get categories (first r) [0.0 0.0 0.0 1.0 0.0]))))
-  
+;(defn train-orig [])
+;   (let [r (clojure.string/split #"\t" (rand-nth training-data-file))]
+;     (->Training (apply mat/sparse-array (rest r)) (get categories (first r) [0.0 0.0 0.0 1.0 0.0])))
+
+(def train-orig [])
+
 (defn -main []
   (let [[test-ds train-ds] (split-at 500 (shuffle train-orig))]
 ;(create-training-set-from-fasta-file "data-files/Rm1021.final.fasta")))]

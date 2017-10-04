@@ -13,8 +13,9 @@
                  [clj-fuzzy "0.4.1"]
                  [criterium "0.4.4"]
                  [biotools "0.1.1-b1"]
+;                 [io.framed/clj-btable "0.1.2" :exclusions [[org.clojure/clojure]]]
                  [iota "1.1.3"]
-                 [thinktopic/cortex "0.9.21"]
+                 [thinktopic/cortex "0.9.22"]
                  [org.clojars.ds923y/nd4clj "0.1.1-SNAPSHOT"]
-                 [thinktopic/experiment "0.9.21"]])
+                 [thinktopic/experiment "0.9.22"]])
     
