@@ -108,8 +108,8 @@
 
 ;; @@
 (def params
-  {:test-ds-size      50000 ;; total = 284807, test-ds ~= 17.5%
-   :optimizer         (adam/adam)   ;; alternately, (adadelta/adadelta)
+  {:test-ds-size      5000
+   :optimizer         (adam/adam)
    :batch-size        100
    :epoch-count       50
    :epoch-size        200000})
@@ -132,6 +132,16 @@
    (layers/dropout 0.5)
    (layers/linear 5)
    (layers/softmax :id :label)])
+
+(def nn
+  (->
+    [(layers/input (dec space) 1 1 :id :data)
+     (layers/convolutional 1024 0 1 20)
+     (layers/dropout 0.9)
+     (layers/relu)
+     (layers/linear 5)
+     (layers/softmax :id :label)]
+    network/linear-network))
 ;; @@
 ;; =>
 ;;; {"type":"html","content":"<span class='clj-var'>#&#x27;harmonious-drylands/network-description</span>","value":"#'harmonious-drylands/network-description"}

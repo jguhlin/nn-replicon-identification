@@ -1,6 +1,161 @@
-(ns nn-replicon-identification.core)
+(ns nn-replicon-identification.core
+  (:require [clojure.core.matrix :as mat]
+            [clojure.core.reducers :as r]
+            [clj-fuzzy.metrics :as fm]
+            [cortex.experiment.train :as train]
+            [cortex.nn.layers :as layers]
+            [cortex.nn.network :as network]
+            [cortex.nn.execute :as execute]
+            [cortex.optimize.adadelta :as adadelta]
+            [cortex.optimize.adam :as adam]
+            [cortex.metrics :as metrics]
+            [cortex.util :as util]
+            [cortex.optimize.adam :as adam]
+            [cortex.experiment.train :as experiment-train]
+            [cortex.nn.execute :as execute]
+            [clojure.math.numeric-tower :as math]))
 
-(defn foo
-  "I don't do a whole lot."
-  [x]
-  (println x "Hello, World!"))
+; (mat/set-current-implementation :vectorz)
+
+(def k 7)
+(def space (math/expt 5 k))
+
+; Use base 5, 0 is \N, etc...
+;(Integer/toString 1953124 5)
+; Build sparse-array 
+
+(defn get-kmers [k]
+  (fn [sequence]
+    (distinct
+      (partition k 1 sequence))))
+
+(defn convert-char-to-number [c]
+  (case c 
+    \N 0 \A 1 \C 2 \T 3 \G 4 0))
+
+(defn convert-kmer [kmer]
+  (new BigInteger (apply str (map convert-char-to-number kmer)) 5))
+
+(def seq1 "ACTGGGCTAATACCAATTAACAGATTGAGATTTAATGATGACAATAGA")
+(def seq2 "TTTAAAAAGTAATACCAATTAACAGATTGAGATTTAATGATGACAATAGAACTGACAATACA")
+(def seq-main
+  (clojure.string/upper-case    "CTCTGGAAAGGAGATTCGGCAGTGCGAAGGCGAGGCCCGCAAGGACGACCAGCCAGATGAGAATATTCTTGAACGGCGACAACCTGGGCATATTTCGAAATGCTCCATCCGCCGGTCTCTGCCGGTCGCGGCCCTTGCCCTAACCACGGTGATTTTGGCCTCGCGTCGCTCCAAAATCAAACCGTGATCAATGCCGATCGAAGGCGCGGTATGCGGGCGAAAACCGCGCACGCTTCTTCAAGTACCCGCGCCGGGGTTACTCCTTGACGGGCTCGCCCTTCACACGAACCTCGGAGACGCCGCTGCGCACGACGCGGACCTTGATGCCCTCGGCGATCTCCACTTCGAGCTCCGTATCGTCGACGACCTTGGTCACCTTGCCGACAATGCCGCCGCCGGTGACGACCTGGTCGCCGCGCCGGATGTTCTTCAGGAGCTCTTCGCGGCGCTTCATCTGCGCACGCTGCGGCCGGATGATCAGGAAATACATCACCACGAAGATCAGCAGGAATGGCAGGATGGACATCAGAATGTCGGCGCCGCCGCCCCAGGGGCCGCCGTCTGCGCGAAAGCTTCGGTAATAAACATCGATCACTCCTTGAGTTCAAATTGCGCGCTTGCCCCCGCGGCAAACCTGCCGGAATATAGGCAAGCCGTCCCGTAACACAAATCGTCGGTACACTTCCCCGTTTCTCCTGCCTCTGGCACAAATTCCGCAGCAGGAGAACCCCCTGGTTGCAGGCTGCCGGTCTTTTCCAGCGCAAACCGCCGTGCTACCGAGAAAAACGCCGCCGGCGGCAGCTTCAACGGATTCGACCGGAGGATGAACGTCGCGGCGATTCAAGGATTTGGGTGGGCTGACGCACGCCCGTTATCGCGCGGGTCGGCCGCCCAGTTCGAAATTCAGCCTGCCGGAGATACATGAAATGCCCGAAAGCAAGATCGACGTCCTGCTCAACGAAATACAGAAGCTTTCGGCCGCGATGGAGCGCATCGCCGGACCGGCATATGCCGTCAACAATTGGCATGAGGCGGAGTGTTTCGTCTGGGCACCGGCCACGCGCCACCTGCAGCCCGTCCCGAGGCCGAATCGCATCGACCTCGCGCTCATCGCCGGCGTCGACCATGTCCGCGACATTCTCTTCGACAACACGCTCCGCTTCGCCGAAGGCTATCCGGCGAACAACGTGCTCCTGTGGGGCGCCCGCGGCATGGGCAAATCGTCACTGGTCAAGGCGGTCCACGCAAAGGTCGCCCACGACACCGGCAGCGCAATCAAGCTTGTCGAAGTACACCGGGAGGATATCGCCACCCTGCCCGTGCTGATGGAAATCCTGAAGGCGGCGCCGATGCCCGTGATCGTCTTCTGCGATGATCTCTCCTTCGATCACGACGATACCTCCTACAAGTCGCTGAAGGCGGTTCTCGACGGCGGCGTCGAGGGGCGCCCGGCAAACGTTCTGCTCTATGCGACGTCCAACCGCAGACACCTGCTTCCCCGCAACATGATGGAAAATGAACAATCCACCGCCATTAACCCCTCGGAGGCCGTCGAGGAAAAAGTGTCGCTATCCGACCGCTTCGGGCTATGGCTGGGTTTCTACAAGTGCAGCCAGGACGACTATCTGGCGATGGTCGACGGGTATGCGCAGTACTTCAAATTGCCTCTCGAGCCCGAAGCGCTGCATGCCGAGGCTCTTGAATGGGCGACGACGCGAGGATCGAGGTCCGGCCGCGTCG"))
+
+(def seq-psyma
+  (clojure.string/upper-case  "GAACACCGGTACGGCGCCGAGCGCATCGACCTTCGACAGCCTGCTCGACAAGGGACAGGCCTCAGCCACCGATATTTGGTCACGTGCCTCCTGGCCGGTCGACATCGTCACCGGCGTCGGCGGCATGATGGTGATCGGCGCGAGCTTCATCGTCGCCGCGATCGGCTATATCGTCTCGCTTTACGCGCGGCTGGCGCTTGCCATCGTGCTCGCGATTGGACCAATTTTCGTGGCGCTCGCCATGTTTCAGGCGACGCGGCGCTTCACGGAGGCATGGATCGGCCAGCTTGCGAACTTTGTGATCCTCCAGGTCCTCGTCGTCGCCGTCGGCTCTCTACTGATCACCTGCATCGACACCACCTTCGCGGCGATCGACGGATATAGCGATGTGCTGATGCGGCCGATCGCACTCTGCGCCATCTGCCTCGCGGCTCTCTATGTCTTCTATCAACTCCCGAACATCGCCTCGGCGCTTGCCGCCGGCGGCGCGTCGTTGACCTACGGCTACGGCGCCGCACGCGACGCCCACGAAAGCACGCTCGCCTGGGCGGCTTCCCATACCGTCCGTGCGGCCGGACGTGGTGTCCGTGCCGTTGGCCGAACCTTCACCTCAAAAGGCTCCGGATCATGACGCTTTTCGCACGAACAAGAGAAAGGCTTTCCAGGATTAATCAGAACGTTCCGCTGCTTTGCGTTGCGGCGATCTTAAGCGGTTGCGCATCGATGACCTATCCGCTCCCGAAATGTGACGGCTATTCGCGCCGGCCCCTCAATCGATCGATGTGGCAGTGGGAAGACAATAGCAACTTCAAGCTGAAACAGTCCGATGCGCGACCGGCGGCCTCTCAGTCCGTCGCCACCGCTTATGCCGGCGAGGGCAGGGAATTTCCCGCCTTCGCACATCTCGACATCGACGCATCCTATCGTCCTTGCGAGGGTTGACTCGATGGTCTCGGCGGACGAACTCAAGACATACTTCGAAAAGGCGCGACGCTTCGATCAGGACCGCGTGATCCAGGT"))
+
+(def seq-psymb 
+  (clojure.string/upper-case  "cgcCGCGGCTGCGGTTCAGCGCCAGCTCCAGATTGTCCCAGACCGTATGGTTCTCGAAGACGGTCGGCTTCTGGAACTTGCGGCCGATGCCGAGCTCGGCGATTGCCGCTTCGTCTTTCTTGGTGAGGTCGATGTCGCCCTTGAAGAAGACCTCGCCCTCGTCCGGCCGCGTCTTGCCGGTGATGATGTCCATCATCGTCGTCTTGCCGGCGCCATTGGGGCCGATGATCGCGCGCAGTTCCCCCGGCTCTACGACGAAGGAGAGCGAGTTTAGCGCCTTGAAGCCATCGAAGGAGACGGAGACCCCATCGAGATAGAGCAGGTTCCTGGGTTTCTTTCCGGTCATGGCGATCACTCCGCGGCCACCGTTTCGGCGTCCGCAAGGCTCGCCGCTTTTTCGCTCTCGCTTTCCTTCCGGGCCGCCGCGTGGGATGTGCGCCGGCTTGCGAGATAGCTCTGCGCCGTGCCGACCACGCCCTTCGGCAGGAAAAGCGTGACGAGGACGAAGAGCCCGCCGAGCGCAAAGAGCCAGAATTCGGGGAAGGCGGCGGTGAATATGCTTTTTCCGCCGTTGACGAGGATCGCGCCGACGATCGGTCCGATCAGCGTGCCGCGCCCGCCGACAGCCGTCCATATGACCACCTCGATCGAATTGGCGGGGGCGAACTCGCCCGGATTGATGATGCCGACTTGCGGCACGTAGAGCGCGCCGGCGACGCCCGCCATCATTGCCGAGACCGTGAAGGCGAAGAGCTTCATGTGCTCGACGCGATAGCCGAGAAAGCGTGTGCGGCTTTCCGCGTCGCGCAGCGCCACCAGCACCTTGCCGAATTTCGAGCGGACGATGCCCGAGGTGACGACGAGCGAAACGGCAAGCGCCAGCGCGGAGGCTGCAAAGAGTGCCGCACGCGTTCCGTCGGCCTGGATGTTGAAGCCGAGGATGTCCTTGAAATCGGTGAGCCCGTTATTGCCGCCGAAGCCCATGTCGTTGCGGAAGAAGGCGAGCAGCAGCGCATAGGTCATCGCCTGGGTGATGATCGAGAGATAGACCCCGTTGACCCGCGAGCGGAAGGCGAACCAGCCGAAGACGAAGGCAAGCAGGCCCGGCACCAGCACCACCATCAGCGCTGCGAACCAGAACATGTCGAAGCCGTACCAGAACCAGGGCAGCTCCTTCCAGTTGAGAAAGACCATGAAGTCCGGCAGCAGCGGATTGCCGTAGGAGCCGCGTGCGCCGATCTGGCGCATCAGATACATGCCCATGGCATAGCCGCCGAGCGCGAAGAAGGCCGCATGCCCCAGCGAGAGGATGCCGCAGAA"))
+
+(defn convert-sequence [sequence]
+  (let [data (frequencies
+               (map 
+                 convert-kmer
+                 ((get-kmers k) sequence)))]
+    (mat/sparse-matrix
+      (for [i (range 0 space)]
+        (get data i 0)))))
+
+
+; Convert into a sequence of 1000bp
+; This is for running the net, not training
+(defn convert-sequences [seq-to-analyze]
+  (let [small-seq (interleave
+                    (range)
+                    (map 
+                      convert-sequence
+                      (partition 100 seq-to-analyze)))]
+    small-seq))
+
+(defn training-set [seqs-to-analyze label]
+  (let [seqs (partition 
+               100 
+               (Math/floor (* k 1.8)) 
+               seqs-to-analyze) ; More aggressive partition here for better training....
+        training-data (r/foldcat
+                        (r/map
+                          (fn [x] {:data (convert-sequence x) :label label})
+                          seqs))]
+    training-data))
+
+(def params
+  {:test-ds-size      5000
+   :optimizer         (adam/adam)
+   :batch-size        100
+   :epoch-count       50
+   :epoch-size        200000})
+
+(def network-description
+  [(layers/input 1000 1 1 :id :data)
+   (layers/convolutional space 0 1 20)
+   (layers/max-pooling 2 0 2)
+   (layers/dropout 0.9)
+   (layers/relu)
+   (layers/convolutional 5 0 1 50)
+   (layers/max-pooling 2 0 2)
+   (layers/batch-normalization)
+   (layers/linear 1000)
+   (layers/relu :center-loss {:label-indexes {:stream :label}
+                              :label-inverse-counts {:stream :label}
+                              :labels {:stream :labels}
+                              :alpha 0.9
+                              :lambda 1e-4})
+   (layers/dropout 0.5)
+   (layers/linear 5)
+   (layers/softmax :id :label)])
+
+(def nn
+  (->
+    [(layers/input 5 1 1 :id :data)
+     (layers/convolutional space 0 1 100)
+;     (layers/max-pooling 2 0 2)
+;     (layers/dropout 0.9)
+;     (layers/relu)
+;     (layers/convolutional 5 0 1 50)
+;     (layers/max-pooling 2 0 2)
+;     (layers/batch-normalization)
+;     (layers/linear 1000)
+;     (layers/dropout 0.5)
+     (layers/linear 3)
+     (layers/softmax :id :label)]
+   network/linear-network))
+
+; This is the more complicated "Example"
+(def train-orig
+  (concat
+    (training-set seq-main [1.0 0.0 0.0])
+    (training-set seq-psyma [0.0 1.0 0.0])
+    (training-set seq-psymb [0.0 0.0 1.0])))
+
+(def train-test
+  (concat
+    (for [i (range 1000)]
+      {:data (mat/matrix (take 5
+                           (repeatedly #(rand-int 2))))
+       :label :main})
+    (for [i (range 1000)]
+      {:data (mat/matrix (take 5
+                           (repeatedly #(rand-int 2)))) 
+       :label :psyma})
+    (for [i (range 1000)]
+      {:data (mat/matrix (take 5
+                           (repeatedly #(rand-int 2)))) 
+       :label :psymb})))
+
+
+(count train-orig)
+(first train-orig)
+
+(try
+  (def trained
+    (experiment-train/train-n 
+      nn
+      train-test
+      train-test
+      :batch-size 200 :epoch-count 100))
+  (catch Exception e
+   (println e)))
+
+(defn -main []
+  (println "done"))
+
