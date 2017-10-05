@@ -2,6 +2,11 @@
   :description "FIXME: write description"
   :url "http://example.com/FIXME"
   :main nn-replicon-identification.core
+  :repl-options {}
+             ;; If nREPL takes too long to load it may timeout,
+             ;; increase this to wait longer before timing out.
+             ;; Defaults to 30000 (30 seconds)
+             :timeout 1200000
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :plugins [[lein-gorilla "0.4.0"]]
