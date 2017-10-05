@@ -1,7 +1,6 @@
 (ns nn-replicon-identification.core
   (:require [clojure.core.matrix :as mat]
             [clojure.core.reducers :as r]
-            [clj-fuzzy.metrics :as fm]
             [cortex.experiment.train :as train]
             [cortex.nn.layers :as layers]
             [cortex.nn.network :as network]
@@ -11,11 +10,10 @@
             [cortex.metrics :as metrics]
             [cortex.util :as util]
             [iota :as iota]
-;            [clj-btable.core :as btable]
+            [clj-btable.core :as btable]
             [cortex.optimize.adam :as adam]
             [cortex.experiment.train :as experiment-train]
             [cortex.nn.execute :as execute]
-            [criterium.core :as crit]
             [clojure.math.numeric-tower :as math]
             [biotools.fasta :as fasta]))
 

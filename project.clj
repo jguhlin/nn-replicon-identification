@@ -9,18 +9,25 @@
              :timeout 1200000
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :plugins [[lein-gorilla "0.4.0"]]
+  :plugins [[lein-gorilla "0.4.0" :exclusions [org.clojure/clojure]]]
   :dependencies [[org.clojure/clojure "1.8.0"]
-                 [org.tensorflow/tensorflow "1.3.0"]
-                 [net.mikera/core.matrix "0.61.0"]
-                 [net.mikera/vectorz-clj "0.47.0"]
+                 ;[org.tensorflow/tensorflow "1.3.0"]
+                 [net.mikera/core.matrix "0.61.0" :exclusions [org.clojure/clojure]]
+                 [net.mikera/vectorz-clj "0.47.0" :exclusions [org.clojure/clojure]]
                  [org.clojure/math.numeric-tower "0.0.4"]
-                 [clj-fuzzy "0.4.1"]
-                 [criterium "0.4.4"]
                  [biotools "0.1.1-b1"]
-;                 [io.framed/clj-btable "0.1.2" :exclusions [[org.clojure/clojure]]]
+                 [io.framed/clj-btable "0.1.3" :exclusions [
+                                                            [org.clojure/tools.reader]
+                                                            [clj-time] 
+                                                            [com.taoensso/encore]
+                                                            [org.codehaus.jackson/jackson-core-asl]]]
                  [iota "1.1.3"]
-                 [thinktopic/cortex "0.9.22"]
-                 [org.clojars.ds923y/nd4clj "0.1.1-SNAPSHOT"]
-                 [thinktopic/experiment "0.9.22"]])
+                 [thinktopic/cortex "0.9.22" :exclusions [
+                                                          [org.clojure/tools.reader]
+                                                          [org.clojure/clojure]]]
+                 [thinktopic/experiment "0.9.22" :exclusions [
+                                                              [commons-io]
+                                                              [com.cognitect/transit-clj]
+                                                              [org.clojure/tools.nrepl]
+                                                              [org.clojure/clojure]]]])
     
