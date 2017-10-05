@@ -1,5 +1,6 @@
 (ns nn-replicon-identification.core
   (:require [clojure.core.matrix :as mat]
+            [clojure.core.matrix.linear :as mat-linear]
             [clojure.core.reducers :as r]
             [cortex.experiment.train :as train]
             [cortex.nn.layers :as layers]
@@ -10,7 +11,6 @@
             [cortex.metrics :as metrics]
             [cortex.util :as util]
             [iota :as iota]
-            [clj-btable.core :as btable]
             [cortex.optimize.adam :as adam]
             [cortex.experiment.train :as experiment-train]
             [cortex.nn.execute :as execute]
@@ -19,7 +19,9 @@
 
 (mat/set-current-implementation :vectorz)
 
-(def k 7)
+; k of 11 is TOO BIG for nn to for
+; k of 9 is too big
+(def k 5)
 (def space (math/expt 5 k))
 
 ; Use base 5, 0 is \N, etc...
@@ -29,7 +31,7 @@
 (defn get-kmers [k]
   (fn [sequence]
     (distinct
-      (partition k 1 sequence)))) ; Could move sliding window by 1
+      (partition k 1 sequence)))) ; Could move sliding window by k, or could do 1
 
 (defn convert-char-to-number [c]
   (case c 
@@ -49,15 +51,22 @@
 (def seq-psymb 
   (clojure.string/upper-case  "cgcCGCGGCTGCGGTTCAGCGCCAGCTCCAGATTGTCCCAGACCGTATGGTTCTCGAAGACGGTCGGCTTCTGGAACTTGCGGCCGATGCCGAGCTCGGCGATTGCCGCTTCGTCTTTCTTGGTGAGGTCGATGTCGCCCTTGAAGAAGACCTCGCCCTCGTCCGGCCGCGTCTTGCCGGTGATGATGTCCATCATCGTCGTCTTGCCGGCGCCATTGGGGCCGATGATCGCGCGCAGTTCCCCCGGCTCTACGACGAAGGAGAGCGAGTTTAGCGCCTTGAAGCCATCGAAGGAGACGGAGACCCCATCGAGATAGAGCAGGTTCCTGGGTTTCTTTCCGGTCATGGCGATCACTCCGCGGCCACCGTTTCGGCGTCCGCAAGGCTCGCCGCTTTTTCGCTCTCGCTTTCCTTCCGGGCCGCCGCGTGGGATGTGCGCCGGCTTGCGAGATAGCTCTGCGCCGTGCCGACCACGCCCTTCGGCAGGAAAAGCGTGACGAGGACGAAGAGCCCGCCGAGCGCAAAGAGCCAGAATTCGGGGAAGGCGGCGGTGAATATGCTTTTTCCGCCGTTGACGAGGATCGCGCCGACGATCGGTCCGATCAGCGTGCCGCGCCCGCCGACAGCCGTCCATATGACCACCTCGATCGAATTGGCGGGGGCGAACTCGCCCGGATTGATGATGCCGACTTGCGGCACGTAGAGCGCGCCGGCGACGCCCGCCATCATTGCCGAGACCGTGAAGGCGAAGAGCTTCATGTGCTCGACGCGATAGCCGAGAAAGCGTGTGCGGCTTTCCGCGTCGCGCAGCGCCACCAGCACCTTGCCGAATTTCGAGCGGACGATGCCCGAGGTGACGACGAGCGAAACGGCAAGCGCCAGCGCGGAGGCTGCAAAGAGTGCCGCACGCGTTCCGTCGGCCTGGATGTTGAAGCCGAGGATGTCCTTGAAATCGGTGAGCCCGTTATTGCCGCCGAAGCCCATGTCGTTGCGGAAGAAGGCGAGCAGCAGCGCATAGGTCATCGCCTGGGTGATGATCGAGAGATAGACCCCGTTGACCCGCGAGCGGAAGGCGAACCAGCCGAAGACGAAGGCAAGCAGGCCCGGCACCAGCACCACCATCAGCGCTGCGAACCAGAACATGTCGAAGCCGTACCAGAACCAGGGCAGCTCCTTCCAGTTGAGAAAGACCATGAAGTCCGGCAGCAGCGGATTGCCGTAGGAGCCGCGTGCGCCGATCTGGCGCATCAGATACATGCCCATGGCATAGCCGCCGAGCGCGAAGAAGGCCGCATGCCCCAGCGAGAGGATGCCGCAGAA"))
 
+(def kh35c-main 
+  (clojure.string/upper-case "GGGAGGTCGGTGCGCTTGGGGCCTACGGCTATCACGACGCCGTCGATTTCACGCCGACGCGCGTGCCGGAAGGCCAGAAATGCGCCGTCGTGCGCAACTATTATGCCCATCATCACGGCATGTCGGTCGCCGCGGTCGCCAATGTCGTCTTCAACGGGCAGCTGCGCGAGTGGTTCCACGCCGATCCCGTCATCGAGGCCGCCGAACTCCTCCTGCAGGAAAAGGCCCCGCGTGACATCCCGGTCATGGCAGCCAAGCGCGAGCCGGAAGCGCTGGGCAAGGGCCAGGCCGATCTCCTGCGCCCCGAAGTCCGCGTCGTCGAAGACCCGATCAATCAGGACCGCGAGACGGTGCTTCTGTCGAACGGTCACTACTCCGTCATGTTGACGGCGACAGGGGCGGGCTATGCCCGCTGGAACGGCCAGTCGGTCACGAGATGGACTCCGGACCCGGTAGAGGACAGGACGGGGACCTTCATCTTCCTTCGCGACACGGTGACGGGCGACTGGTGGTCGGCCACGGCCGAGCCCCGGCGTGCGCCGGGCGAAAAGACCGTTACCCGCTTCGGCGACGACAAGGCCGAATTCGTCAAGACCGTCGGCGATCTGACAAGCGAGGTGGAATGCATCGTCGCGACCGAGCACGATGCCGAAGGCCGCCGGGTTATCCTGCTCAACACGGGCACGGAAGACCGGTTCATCGAGGTGACCTCCTATGCCGAGCCGGTGCTTGCGATGGACGATGCCGACAGCTCGCACCCGACCTTCTCGAAGATGTTCCTGCGCACCGAGATCAGCCGTCACGGAGACGTGATATGGGTCTCGCGCAACAAGCGAAGCCCCGGCGATCCGGACATCGAGGTCGCCCATCTCGTCACCGACAATGCCGGCAGCGAGCGCCACACGCAGGCGGAAACCGATCGCCGGCGCTTCCTCGGCCAGGGCCGCACGCTTGCCGAGGCGGCCGCATTCGACCCGGGCGCCACGCTTTCCGGCACCGACGGCTTCACGCTCGATCCGATCGTGTCGCTCCGCCGCGTCGTACGCGTGCCGGCGGGCAAGAAAGTGAGCGTCATCTTCTGGACGATCGCCGCCCCGGACAGGGAAGGCGTCGACCGGGCGATCGACCGCTACCGGCATCCGGAAACCTTCAATCACGAGCTCATCCATGCCTGGACCCGCAGCCAGGTGCAGATGCGCCATGTCGGGATCACCTCGAAGGAGGCCGCGAGCTTCCAGATGCTCGGCCGCTATCTCGTCTATCCGGATATGCACCTTCGCGCCGACGCGGAGACCGTCAAGACCGGGCTCGCCTCGCAATCGGCGCTGTGGCCGCTGGCGATCTCCGGCGACTTCCCGATCTTCTGCCTCAGGATCAACGACGACGGCGATCTCGGCATCGCCCGCGAGGCCTTGCGGGCGCAGGAATATCTGAGAGCTCGCGGCATCACCGCCGATCTGGTGGTCGTCAACGAGCGCGCCTCCTCCTACGCGCAGGACCTGCAGCACACGCTCGACTCGATGTGCGAGAATTTGAGGCTTCGCGGCCTTTCGGACGGCCCGCGCCAGCACATATTTGCGGTGCGCCGGGACCTTATGGAACCGGAAACCTGGTCGACGCTGATCTCGGCATCCCGCGCCGTCTTCCATGCGCGCAACGGCACGATCTCGGATCAGATAGCCCGCGCCACATCGCTCTACTCCAAACCTTCCGAAAAGAAGGAGGAGGGCGCCGAGATGCTGCTGCCGGTGATACGGGAG"))
+(def wsm419-uni2 
+  (clojure.string/upper-case "CGTCAACGAGCTGCTCACCAACGCGCTCAAGCATGCTTTCAACGGCCGCGAAGGAGGAGTAATCACGCTGCGAAGCACTTTTGAGGATGATGGCTACCGTGTCATCGTTGCGGACGACGGAATAGGTTTCCCGGACGGAGAGACCTGGCCCAAACACGGCAAGCTTGGCGAGTTGATCGCGCAGTCGCTTCGCGAAAATTCCAGGGCTGATCTCCAGGTGATCTCCACGCCGGGTCAAGGCACACGCGCAACGATTCGTTTCCGGAACGACTCCGTATAGGCGCGCGAGCGTCCGAGCACCGCGCATCATAAGGCCGCGCGCGAACGCGGCTGCATAGGATGTCTATCGGCCCGGCTTATAGATCTGGTCGAAAATCCCCCATCGTCGAAGAACTTCGGCTGGGCTTCCTGCCAACCGCCGAAGTCGCCAATGGTGACCAGTTTGAGATCGGCAAAGCGTGCCGAGTCCGCGGGGTCGGCCAGCTCGGGCTTGAACGGCCGATAGTAGTGCTTGGCGACGATCTTCTGGCCGACGTCGCTGTAGAGGTAGCCGAGATAGGCTTCGGCAACATTGCGGGTGCCTTTGCTGTCGACATTCCCGTCCAAGAGCGCCACGGAGGGCTCGGCCCTGATCGATATGGACGGTGTCACGATCTCGAACTTGTCGGGGCCGAGTTCATCGAGCGCGAGATAGGCCTCATTCTCCCAGGCGAGCAGCACGTCGCCGAGCCCGCGATGGACGAAAGTGGTCATCGCTCCCCACGCGCCGGTGTCGAGAACGAGAACCTGCTTGAAAAGCGCCGCCGCATATTCCTGCGCCTTGGCCTCGTCGCCGTTGTTTGCATCCCGCGCCCAGGCCCAGGCTGCAAGGAAGTTCCAGCGCGCGCCACCCGAGGTCTT"))
+
+
 (defn convert-sequence [sequence]
-  (let [data (frequencies
+  (let [mfactor (/ 1000 (count sequence))
+        data (frequencies
                (map 
                  convert-kmer
                  ((get-kmers k) sequence)))]
     (mat/sparse-array
       (map 
         (fn [x] 
-          (get data x 0.0))
+          (* mfactor (get data x 0.0)))
         (range 0 space)))))
 
 ; Convert into a sequence of 10 00bp
@@ -67,18 +76,44 @@
                     (range)
                     (map 
                       convert-sequence
-                      (partition 1000 seq-to-analyze)))]
+                      (partition-all 1000 seq-to-analyze)))]
     small-seq))
 
 (defrecord Training [data label])
 
+;(let [data (sort-by key (frequencies (map convert-kmer ((get-kmers 5) seq1))))])
+;      indices (map first data)])
+;      vals (map second data)])
+;  (mat/set-indices (mat/new-sparse-array space) indices vals))
+
+(defn convert-sequence-training [sequence]
+  (let [mfactor (/ 1000 (count sequence))
+        data (sort-by 
+               key
+               (frequencies
+                 (map 
+                   convert-kmer
+                   ((get-kmers k) sequence))))]
+    (flatten
+      (for [[k v] data]
+        [(.toString (biginteger k) 36) (float (* mfactor v))]))))
+
 (defn generate-training-set [seq-to-analyze label]
-  (let [seqs (partition 
-               1000
-               1000 ; Can use smaller numbers to make a sliding window -- But file gets too big -- Need a way to store sparse matrices
-               seq-to-analyze)]
+  (let [seqs (concat
+               (partition-all 
+                 1000
+                 1000 ; Can use smaller numbers to make a sliding window -- But file gets too big -- Need a way to store sparse matrices
+                 seq-to-analyze)
+               (partition-all ; Vary this number so we can train on non-whole numbers
+                 500
+                 500
+                 seq-to-analyze)
+               (partition-all ; Train on larger sets of sequence
+                 2000
+                 2000
+                 seq-to-analyze))]
       (map 
-        (fn [x] (cons label (convert-sequence x)))
+        (fn [x] (cons label (convert-sequence-training x)))
         seqs)))
 
 (def categories 
@@ -88,16 +123,66 @@
    :others [0.0 0.0 0.0 1.0 0.0]
    :acc    [0.0 0.0 0.0 0.0 1.0]})
 
+(defn -parse-seq [s]
+  (if (= 0.0 (mat/esum s)) 
+    (str "A" (.toString (biginteger (first (mat/shape s))) 36))
+    (clojure.string/join "\t" s)))
+  
+(defn serialize-sparse [a]
+  (clojure.string/join "\t" (map -parse-seq (partition-by zero? a))))
+
+(defn -unparse-seq [s]
+  (if (= \A (first s))
+    (repeat (read-string (new BigInteger (apply str (rest s)) 36) 0.0))
+    (Double/parseDouble s)))
+
+(defn deserialize-sparse [s]
+  (mat/sparse-array (flatten (map -unparse-seq (clojure.string/split s #"\t")))))
+
+(defn convert-to-training [line]
+  (let [ds (deserialize-sparse line)]
+    {:data (mat/sparse-array (drop (count (first categories)))) :labels (take 5 ds)}))
+  
 (defn create-training-set-from-fasta-file [file]
   (with-open [rdr (clojure.java.io/reader file)
+              data (clojure.java.io/writer "data.atsv" :append true)]
+    (doseq [lines (map 
+                    (fn [x]
+                     (generate-training-set 
+                       (clojure.string/upper-case (:seq x))
+                       (keyword (:id x))))
+                    (fasta/parse rdr))]
+      (doseq [line lines]
+        (.write data (clojure.string/join "\t" (concat line)))
+        (.write data "\n")))))
+; (create-training-set-from-fasta-file "data-files/Rm1021.final.fasta")
+
+(defn parse-line [line]
+  (let [line-p (clojure.string/split line #"\t")
+        category (read-string (first line-p))
+        data (partition 2 (rest line-p))]
+   (->Training
+     (mat/set-indices 
+       (mat/new-sparse-array space) 
+       (map (comp (fn [x] (new BigInteger x 36)) first) data) 
+       (map (comp read-string second) data))
+     (get categories category))))
+
+(defn get-training-item [batch-size]
+  (let [training-file (iota/vec "data.atsv")]
+    (fn []
+      (repeatedly batch-size #(parse-line (rand-nth training-file))))))
+
+; This makes very large files (>20Gb for a single strain)
+(defn create-training-set-from-fasta-file-to-tsv [file]
+  (with-open [rdr (clojure.java.io/reader file)
               data (clojure.java.io/writer "data.tsv" :append true)]
-    (doseq [line (apply concat
-                   (map 
-                     (fn [x]
-                       (generate-training-set 
-                         (clojure.string/upper-case (:seq x))
-                         (keyword (:id x))))
-                     (fasta/parse rdr)))]
+    (doseq [line (pmap 
+                   (fn [x]
+                     (generate-training-set 
+                       (clojure.string/upper-case (:seq x))
+                       (keyword (:id x))))
+                   (fasta/parse rdr))]
       (.write data (clojure.string/join "\t" line))
       (.write data "\n"))))
 
@@ -129,25 +214,39 @@
 ;   (layers/linear 5)
 ;   (layers/softmax :id :label)})
 
-(def nn
-  (->
-    [(layers/input space 1 1 :id :data)
-     ; (layers/convolutional 5 0 1 5)
-     ;     (layers/max-pooling 2 0 2)
-     ;     (layers/dropout 0.9)
-     ;     (layers/relu)
-     ;     (layers/convolutional 5 0 1 20)
-     ;     (layers/max-pooling 2 0 2)
-     ;     (layers/batch-normalization)
-     ;     (layers/linear 50)
-     ;     (layers/dropout 0.5)
-;     (layers/dropout 0.9)
-     (layers/linear (Math/ceil (/ space 64)))
-;     (layers/relu)
-;     (layers/dropout 0.9)
-     (layers/linear 4)
-     (layers/softmax :id :label)]
-   network/linear-network))
+
+;         (layers/linear (* 10 (Math/ceil (math/sqrt (math/sqrt space)))))
+         ;         (layers/convolutional 20 0 1 5)
+;         (layers/dropout 0.9)
+;         (layers/linear space)
+;         (layers/linear 2048)
+         ;         (layers/relu)
+ ;         (layers/linear->softmax 5)
+
+(defn define-nn []
+  (def nn
+    (->
+      [(layers/input space 1 1 :id :data)
+       (layers/linear 256)
+       ;(layers/relu)
+       (layers/linear 5)
+       (layers/softmax :id :label)]
+     network/linear-network)))
+
+(defn train []
+  (let [data-fn (get-training-item 2000)]
+   (try
+     (def trained
+       (experiment-train/train-n 
+         nn
+         data-fn
+         data-fn
+         :batch-size 2000 :epoch-count 500))
+     (catch Exception e
+       (println e))))
+  
+  (println (execute/run trained [{:data (convert-sequence kh35c-main)}])))
+
 
 ;(def train-orig2
 ;  (concat
@@ -168,9 +267,6 @@
 ;       :label [0.0 0.0 1.0]})))
 
 ;(println train-test)
-
-(def kh35c-main "GGGAGGTCGGTGCGCTTGGGGCCTACGGCTATCACGACGCCGTCGATTTCACGCCGACGCGCGTGCCGGAAGGCCAGAAATGCGCCGTCGTGCGCAACTATTATGCCCATCATCACGGCATGTCGGTCGCCGCGGTCGCCAATGTCGTCTTCAACGGGCAGCTGCGCGAGTGGTTCCACGCCGATCCCGTCATCGAGGCCGCCGAACTCCTCCTGCAGGAAAAGGCCCCGCGTGACATCCCGGTCATGGCAGCCAAGCGCGAGCCGGAAGCGCTGGGCAAGGGCCAGGCCGATCTCCTGCGCCCCGAAGTCCGCGTCGTCGAAGACCCGATCAATCAGGACCGCGAGACGGTGCTTCTGTCGAACGGTCACTACTCCGTCATGTTGACGGCGACAGGGGCGGGCTATGCCCGCTGGAACGGCCAGTCGGTCACGAGATGGACTCCGGACCCGGTAGAGGACAGGACGGGGACCTTCATCTTCCTTCGCGACACGGTGACGGGCGACTGGTGGTCGGCCACGGCCGAGCCCCGGCGTGCGCCGGGCGAAAAGACCGTTACCCGCTTCGGCGACGACAAGGCCGAATTCGTCAAGACCGTCGGCGATCTGACAAGCGAGGTGGAATGCATCGTCGCGACCGAGCACGATGCCGAAGGCCGCCGGGTTATCCTGCTCAACACGGGCACGGAAGACCGGTTCATCGAGGTGACCTCCTATGCCGAGCCGGTGCTTGCGATGGACGATGCCGACAGCTCGCACCCGACCTTCTCGAAGATGTTCCTGCGCACCGAGATCAGCCGTCACGGAGACGTGATATGGGTCTCGCGCAACAAGCGAAGCCCCGGCGATCCGGACATCGAGGTCGCCCATCTCGTCACCGACAATGCCGGCAGCGAGCGCCACACGCAGGCGGAAACCGATCGCCGGCGCTTCCTCGGCCAGGGCCGCACGCTTGCCGAGGCGGCCGCATTCGACCCGGGCGCCACGCTTTCCGGCACCGACGGCTTCACGCTCGATCCGATCGTGTCGCTCCGCCGCGTCGTACGCGTGCCGGCGGGCAAGAAAGTGAGCGTCATCTTCTGGACGATCGCCGCCCCGGACAGGGAAGGCGTCGACCGGGCGATCGACCGCTACCGGCATCCGGAAACCTTCAATCACGAGCTCATCCATGCCTGGACCCGCAGCCAGGTGCAGATGCGCCATGTCGGGATCACCTCGAAGGAGGCCGCGAGCTTCCAGATGCTCGGCCGCTATCTCGTCTATCCGGATATGCACCTTCGCGCCGACGCGGAGACCGTCAAGACCGGGCTCGCCTCGCAATCGGCGCTGTGGCCGCTGGCGATCTCCGGCGACTTCCCGATCTTCTGCCTCAGGATCAACGACGACGGCGATCTCGGCATCGCCCGCGAGGCCTTGCGGGCGCAGGAATATCTGAGAGCTCGCGGCATCACCGCCGATCTGGTGGTCGTCAACGAGCGCGCCTCCTCCTACGCGCAGGACCTGCAGCACACGCTCGACTCGATGTGCGAGAATTTGAGGCTTCGCGGCCTTTCGGACGGCCCGCGCCAGCACATATTTGCGGTGCGCCGGGACCTTATGGAACCGGAAACCTGGTCGACGCTGATCTCGGCATCCCGCGCCGTCTTCCATGCGCGCAACGGCACGATCTCGGATCAGATAGCCCGCGCCACATCGCTCTACTCCAAACCTTCCGAAAAGAAGGAGGAGGGCGCCGAGATGCTGCTGCCGGTGATACGGGAG")
-(def wsm419-uni2 "CGTCAACGAGCTGCTCACCAACGCGCTCAAGCATGCTTTCAACGGCCGCGAAGGAGGAGTAATCACGCTGCGAAGCACTTTTGAGGATGATGGCTACCGTGTCATCGTTGCGGACGACGGAATAGGTTTCCCGGACGGAGAGACCTGGCCCAAACACGGCAAGCTTGGCGAGTTGATCGCGCAGTCGCTTCGCGAAAATTCCAGGGCTGATCTCCAGGTGATCTCCACGCCGGGTCAAGGCACACGCGCAACGATTCGTTTCCGGAACGACTCCGTATAGGCGCGCGAGCGTCCGAGCACCGCGCATCATAAGGCCGCGCGCGAACGCGGCTGCATAGGATGTCTATCGGCCCGGCTTATAGATCTGGTCGAAAATCCCCCATCGTCGAAGAACTTCGGCTGGGCTTCCTGCCAACCGCCGAAGTCGCCAATGGTGACCAGTTTGAGATCGGCAAAGCGTGCCGAGTCCGCGGGGTCGGCCAGCTCGGGCTTGAACGGCCGATAGTAGTGCTTGGCGACGATCTTCTGGCCGACGTCGCTGTAGAGGTAGCCGAGATAGGCTTCGGCAACATTGCGGGTGCCTTTGCTGTCGACATTCCCGTCCAAGAGCGCCACGGAGGGCTCGGCCCTGATCGATATGGACGGTGTCACGATCTCGAACTTGTCGGGGCCGAGTTCATCGAGCGCGAGATAGGCCTCATTCTCCCAGGCGAGCAGCACGTCGCCGAGCCCGCGATGGACGAAAGTGGTCATCGCTCCCCACGCGCCGGTGTCGAGAACGAGAACCTGCTTGAAAAGCGCCGCCGCATATTCCTGCGCCTTGGCCTCGTCGCCGTTGTTTGCATCCCGCGCCCAGGCCCAGGCTGCAAGGAAGTTCCAGCGCGCGCCACCCGAGGTCTT")
 
 ;println "Generating Training Set")
 
@@ -199,21 +295,21 @@
 ;   (let [r (clojure.string/split #"\t" (rand-nth training-data-file))]
 ;     (->Training (apply mat/sparse-array (rest r)) (get categories (first r) [0.0 0.0 0.0 1.0 0.0])))
 
-(def train-orig [])
+;(def train-orig [])
 
-(defn -main []
-  (let [[test-ds train-ds] (split-at 500 (shuffle train-orig))]
-;(create-training-set-from-fasta-file "data-files/Rm1021.final.fasta")))]
-    (try
-      (def trained
-        (experiment-train/train-n 
-          nn
-          train-ds
-          test-ds
-          :batch-size 500 :epoch-count 500))
-      (catch Exception e
-        (println e))))
+(defn -main [])
+;  (let [[test-ds train-ds] (split-at 500 (shuffle train-orig))]
+  ;(create-training-set-from-fasta-file "data-files/Rm1021.final.fasta")))]
+;  (try
+;  (def trained
+;  (experiment-train/train-n 
+;  nn
+;  train-ds
+;  test-ds
+;  :batch-size 500 :epoch-count 500
+;  (catch Exception e
+;  (println e)
   
-  (println (execute/run trained [{:data (convert-sequence kh35c-main)}])))
+;  (println (execute/run trained [{:data (convert-sequence kh35c-main)}])))
                                  
 
