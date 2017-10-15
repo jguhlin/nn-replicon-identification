@@ -11,3 +11,5 @@ pom.xml.asc
 .hg/
 *.tsv
 *.nippy
+*.fasta
+my-model*
