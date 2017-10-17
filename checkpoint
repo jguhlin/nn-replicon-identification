@@ -1,2 +1,3 @@
-model_checkpoint_path: "my-model-0"
+model_checkpoint_path: "kmer-model-0"
 all_model_checkpoint_paths: "my-model-0"
+all_model_checkpoint_paths: "kmer-model-0"
