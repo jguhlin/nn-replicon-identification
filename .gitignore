@@ -21,3 +21,4 @@ training-files/*
 *job
 *.job.o*
 *.job.e*
+*.picklepickle
