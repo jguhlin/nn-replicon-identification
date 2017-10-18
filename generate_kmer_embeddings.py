@@ -261,7 +261,7 @@ with graph.as_default():
   init = tf.global_variables_initializer()
   saver = tf.train.Saver()
 
-num_steps = 50000001
+num_steps = 25000001
 
 print("Loading initial batch data, this could take a few minutes")
 
