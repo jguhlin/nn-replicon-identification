@@ -69,7 +69,7 @@ def convert_to_kmer(kmer):
 
 # Not using sparse tensors anymore.
    
-tf.logging.set_verbosity(tf.logging.INFO)
+# tf.logging.set_verbosity(tf.logging.INFO)
 
 # Get all kmers, in order, with a sliding window of k (but sliding 1bp for each iteration up to k)
 # Also get RC for all....
