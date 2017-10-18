@@ -18,3 +18,6 @@ data-files/*
 kmer-model*
 data-files/*
 training-files/*
+*job
+*.job.o*
+*.job.e*
