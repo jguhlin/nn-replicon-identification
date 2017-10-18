@@ -16,3 +16,5 @@ my-model*
 *.fa
 data-files/*
 kmer-model*
+data-files/*
+training-files/*
