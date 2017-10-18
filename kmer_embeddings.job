@@ -1,0 +1,20 @@
+#!/bin/bash -l
+#PBS -l nodes=1:gpus=2,walltime=20:00
+#PBS -q k40
+#PBS -m abe
+#PBS -M joseph.guhlin@gmail.com
+#PBS -A tiffinp
+
+source ~/.bashrc
+
+module load cuda/8.0
+module load cuda-sdk/8.0
+# module load cudnn/7.0
+module load gcc/4.9.2
+module load binutils/2.25/gcc4.9.2
+
+source activate tensorflow
+
+cd /home/tiffinp/guhli007/work/nn-replicon-identification
+
+python test_tensorflow.py
