@@ -272,7 +272,7 @@ tdata = list()
 tdata = future.result()
 print("tdata length: ", str(len(tdata)))
 
-with tf.Session(graph=graph, config=tf.ConfigProto(log_device_placement=True)) as session:
+with tf.Session(graph=graph, config=tf.ConfigProto(log_device_placement=False)) as session:
   # We must initialize all variables before we use them.
   init.run()
   print('Initialized')
