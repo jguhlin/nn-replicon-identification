@@ -95,17 +95,16 @@ def get_kmers_from_seq(sequence):
 data = list()
 
 def load_fasta(filename):
-    data = dict()
-    file_base_name = ntpath.basename(filename)
-    picklefilename = file_base_name + ".picklepickle"
+    data = list()
+    file_base_name = os.path.basename(filename)
+    picklefilename = file_base_name + ".kmerdict.picklepickle"
     if os.path.isfile(picklefilename):
         print("Loading from pickle")
         data = pickle.load(open(picklefilename, "rb"))
     else:
         print("File not found, generating new sequence: " + picklefilename)
         for seq_record in SeqIO.parse(filename, "fasta"):
-            data.update({seq_record.id:
-                         get_kmers_from_seq(seq_record.seq.upper())})
+            data.extend(get_kmers_from_seq(seq_record.seq.upper()))
         pickle.dump(data, open(picklefilename, "wb"))
     return(data)
         
