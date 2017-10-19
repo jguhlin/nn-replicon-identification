@@ -1,8 +1,5 @@
 import tensorflow as tf
 import numpy as np
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-from scipy.sparse import csr_matrix
 from collections import Counter
 import collections
 import random
@@ -20,9 +17,7 @@ import time
 import random
 from random import shuffle
 import pickle
-
-
-
+import sys
 
 # k-mer size to use
 k = 9
@@ -100,9 +95,18 @@ def get_kmers_from_seq(sequence):
 data = list()
 
 def load_fasta(filename):
-    data = list()
-    for seq_record in SeqIO.parse(filename, "fasta"):
-        data.extend(get_kmers_from_seq(seq_record.seq.upper()))
+    data = dict()
+    file_base_name = ntpath.basename(filename)
+    picklefilename = file_base_name + ".picklepickle"
+    if os.path.isfile(picklefilename):
+        print("Loading from pickle")
+        data = pickle.load(open(picklefilename, "rb"))
+    else:
+        print("File not found, generating new sequence: " + picklefilename)
+        for seq_record in SeqIO.parse(filename, "fasta"):
+            data.update({seq_record.id:
+                         get_kmers_from_seq(seq_record.seq.upper())})
+        pickle.dump(data, open(picklefilename, "wb"))
     return(data)
         
 def get_kmers_from_file(filename):
@@ -277,7 +281,7 @@ with tf.Session(graph=graph, config=tf.ConfigProto(log_device_placement=False)) 
   init.run()
   print('Initialized')
 
-  saver.restore(session, "my-model-200000")
+  saver.restore(session, "kmer-model-500000")
   print("Model restored.")
 
   average_loss = 0
@@ -288,6 +292,7 @@ with tf.Session(graph=graph, config=tf.ConfigProto(log_device_placement=False)) 
         # Start loading the next file, so it has time to finish while the neural net does its training
         tdata = future.result()
         future = executor.submit(load_fasta, filegen())
+        sys.stdout.flush()
         
     if step == 5:
         print("Reached step 5!")
@@ -312,12 +317,14 @@ with tf.Session(graph=graph, config=tf.ConfigProto(log_device_placement=False)) 
             # The average loss is an estimate of the loss over the last 2000 batches.
         print('Average loss at step ', step, ': ', average_loss)
         average_loss = 0
+        sys.stdout.flush()
     
-    # Save every 50k steps
-    if step % 500000 == 0:
+    # Save every 200k steps
+    if step % 200000 == 0:
         print("Saving model at step: ", step)
         saver.save(session, './kmer-model', global_step=step)
         print("Saved model at step: ", step)
+        sys.stdout.flush()
 
         
 #    if step % 20000 == 0:
