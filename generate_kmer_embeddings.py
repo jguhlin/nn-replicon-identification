@@ -206,7 +206,7 @@ batch_size = 32768
 embedding_size = 128
 window_size = 4
 
-validation_set = generate_training_batch(training_data, 10000, window_size)
+validation_set = generate_training_batch(training_data, 100000, window_size)
 validation_kmers = list(set([i[0] for i in validation_set]))
 del validation_set
 
