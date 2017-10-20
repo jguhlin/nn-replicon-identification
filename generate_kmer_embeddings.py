@@ -203,7 +203,7 @@ filegen = training_file_generator("data-files/")
 
 training_data = load_fasta(filegen())
 
-batch_size = 8192
+batch_size = 32768
 embedding_size = 128
 window_size = 4
 
@@ -214,7 +214,7 @@ del validation_set
 # We pick a random validation set to sample nearest neighbors. Here we limit the
 # validation samples to the words that have a low numeric ID, which by
 # construction are also the most frequent.
-valid_size = 1024
+valid_size = 2048
 valid_examples = [validation_kmers[i] for i in np.random.choice(len(validation_kmers), valid_size, replace=False)]
 del validation_kmers
 num_sampled = 256
@@ -265,7 +265,7 @@ with graph.as_default():
   init = tf.global_variables_initializer()
   saver = tf.train.Saver()
 
-num_steps = 25000001
+num_steps = 600001
 
 print("Loading initial batch data, this could take a few minutes")
 
@@ -281,21 +281,18 @@ with tf.Session(graph=graph, config=tf.ConfigProto(log_device_placement=False)) 
   init.run()
   print('Initialized')
 
-  saver.restore(session, "kmer-model-500000")
+  saver.restore(session, "kmer-model-600000")
   print("Model restored.")
 
   average_loss = 0
   for step in xrange(num_steps):
     
-    if step % 30000 == 0: # Change files every 15k steps
+    if step % 10000 == 0: # Change files every 10k steps
         print("Loading new file at step: ", step)
         # Start loading the next file, so it has time to finish while the neural net does its training
         tdata = future.result()
         future = executor.submit(load_fasta, filegen())
         sys.stdout.flush()
-        
-    if step == 5:
-        print("Reached step 5!")
         
     if len(tdata) == 0:
         print("Using short-circuit load-fasta at step: ", step)
@@ -310,7 +307,7 @@ with tf.Session(graph=graph, config=tf.ConfigProto(log_device_placement=False)) 
     _, loss_val = session.run([optimizer, loss], feed_dict=feed_dict)
     average_loss += loss_val
 
-    # Print status every 10k steps
+    # Print status every 25k steps
     if step % 25000 == 0:
         if step > 0:
             average_loss /= 25000
@@ -319,8 +316,8 @@ with tf.Session(graph=graph, config=tf.ConfigProto(log_device_placement=False)) 
         average_loss = 0
         sys.stdout.flush()
     
-    # Save every 200k steps
-    if step % 200000 == 0:
+    # Save every 100k steps
+    if step % 100000 == 0:
         print("Saving model at step: ", step)
         saver.save(session, './kmer-model', global_step=step)
         print("Saved model at step: ", step)
