@@ -264,7 +264,7 @@ with graph.as_default():
   init = tf.global_variables_initializer()
   saver = tf.train.Saver()
 
-num_steps = 600001
+num_steps = 150000
 
 print("Loading initial batch data, this could take a few minutes")
 
@@ -280,13 +280,13 @@ with tf.Session(graph=graph, config=tf.ConfigProto(log_device_placement=False)) 
   init.run()
   print('Initialized')
 
-  saver.restore(session, "kmer-model-600000")
+  saver.restore(session, "kmer-model-100000")
   print("Model restored.")
 
   average_loss = 0
   for step in xrange(num_steps):
     
-    if step % 10000 == 0: # Change files every 10k steps
+    if step % 500 == 0: # Change files every 0.5k steps # Batch size is large enough right now....
         print("Loading new file at step: ", step)
         # Start loading the next file, so it has time to finish while the neural net does its training
         tdata = future.result()
@@ -306,17 +306,17 @@ with tf.Session(graph=graph, config=tf.ConfigProto(log_device_placement=False)) 
     _, loss_val = session.run([optimizer, loss], feed_dict=feed_dict)
     average_loss += loss_val
 
-    # Print status every 25k steps
-    if step % 25000 == 0:
+    # Print status every 1k steps
+    if step % 1000 == 0:
         if step > 0:
-            average_loss /= 25000
+            average_loss /= 1000
             # The average loss is an estimate of the loss over the last 2000 batches.
         print('Average loss at step ', step, ': ', average_loss)
         average_loss = 0
         sys.stdout.flush()
     
-    # Save every 100k steps
-    if step % 100000 == 0:
+    # Save every 20k steps
+    if step % 20000 == 0:
         print("Saving model at step: ", step)
         saver.save(session, './kmer-model', global_step=step)
         print("Saved model at step: ", step)

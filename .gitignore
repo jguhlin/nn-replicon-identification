@@ -22,3 +22,6 @@ training-files/*
 *.job.o*
 *.job.e*
 *.picklepickle
+*.gz
+iris_training.csv
+*.csv
