@@ -22,6 +22,11 @@ import sys
 # k-mer size to use
 k = 9
 
+# Guidance: the total genome size is size * 2 (reverse complement)
+# Should make sure each iteration hits that total size, and preferably a few times
+# It's ok to keep re-training the model
+# Each iteration does batch_size * k...... 
+
 #
 # NOTE!!!!!!!!!!!!!!!!
 #
