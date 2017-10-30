@@ -112,6 +112,7 @@ def load_fasta(filename):
             data.update({seq_record.id:
                          get_kmers_from_seq(seq_record.seq.upper())})
         pickle.dump(data, open(picklefilename, "wb"))
+    sys.stdout.flush()
     return(data)
         
 def get_kmers_from_file(filename):
@@ -322,10 +323,10 @@ def my_input_fn():
                                          tf.int64),
                                         (tf.TensorShape([15,128]),
                                          tf.TensorShape(None)))
-    ds = ds.repeat(1)
-    ds = ds.prefetch(200000)
-    ds = ds.shuffle(buffer_size=100000)
-    ds = ds.batch(10000)
+    ds = ds.repeat(2)
+    ds = ds.prefetch(2000000)
+    ds = ds.shuffle(buffer_size=1000000)
+    ds = ds.batch(50000)
     
     def add_labels(arr, lab):
         return({"x": arr}, lab)
@@ -342,20 +343,44 @@ def my_input_fn():
 # print(first_batch)
 
 
-nn = tf.estimator.DNNClassifier(feature_columns=feature_columns,
-                                hidden_units = [256, 128, len(replicons_list) + 10],
-                                activation_fn=tf.nn.relu,
-                                dropout=0.1,
-                                model_dir="classifier",
-                                n_classes=len(replicons_list),
-                                optimizer="Adam")
+# nn = tf.estimator.DNNClassifier(feature_columns=feature_columns,
+#                                 hidden_units = [256, 128, len(replicons_list) + 10],
+#                                 activation_fn=tf.nn.tanh,
+#                                 dropout=0.1,
+#                                 model_dir="classifier",
+#                                 n_classes=len(replicons_list),
+#                                 optimizer="Momentum")
 
 # Have to know the names of the tensors to do this level of logging....
 # Custom estimator would allow it....
 # tensors_to_log = {"probabilities": "softmax_tensor"}
 # logging_hook = tf.train.LoggingTensorHook(tensors=tensors_to_log, every_n_iter=100)
 
-nn.train(input_fn = my_input_fn)
+# nn.train(input_fn = my_input_fn)
+
+
+# Trained on l1 and l2 as 0.001 and learning_rate 0.1
+# Changing learning rate to 0.2 for additional run
+
+dnn = tf.estimator.DNNClassifier(feature_columns=feature_columns,
+                                hidden_units = [256, 45],
+                                activation_fn=tf.nn.relu,
+                                dropout=0.05,
+                                model_dir="classifier.relu.dropout0.05.proximaladagrad.lrecoli",
+                                n_classes=len(replicons_list),
+                                optimizer=tf.train.ProximalAdagradOptimizer(
+                                               learning_rate=0.2,
+                                               l1_regularization_strength=0.001,
+                                               l2_regularization_strength=0.001))
+
+acc = dnn.evaluate(input_fn = my_input_fn, steps=1000)
+print("Accuracy: " + acc["accuracy"] + "\n");
+print("Loss: %s" % acc["loss"])
+print("Root Mean Squared Error: %s" % acc["rmse"])
+
+
+dnn.train(input_fn = my_input_fn)
+
 
 
 
