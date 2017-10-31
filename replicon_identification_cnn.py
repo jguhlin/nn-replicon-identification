@@ -327,15 +327,15 @@ def my_input_fn():
                                          tf.TensorShape(None)))
                                         
     # Numbers reduced to run on my desktop
-#    ds = ds.repeat(2)
-#    ds = ds.prefetch(5000000)
-#    ds = ds.shuffle(buffer_size=500000)
-#    ds = ds.batch(5000)
+    ds = ds.repeat(4)
+    ds = ds.prefetch(5000000)
+    ds = ds.shuffle(buffer_size=500000)
+    ds = ds.batch(8000)
     
-    ds = ds.repeat(1)
-    ds = ds.prefetch(1000)
-    ds = ds.shuffle(buffer_size=500)
-    ds = ds.batch(250)
+#    ds = ds.repeat(1)
+#    ds = ds.prefetch(1000)
+#    ds = ds.shuffle(buffer_size=500)
+#    ds = ds.batch(250)
     
     def add_labels(arr, lab):
         return({"x": arr}, lab)
