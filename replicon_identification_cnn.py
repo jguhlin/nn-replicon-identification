@@ -23,6 +23,8 @@ import pickle
 import ntpath
 import os.path
 import sys
+from tensorflow.python.summary import summary
+
 
 # k-mer size to use
 k = 9
@@ -326,9 +328,9 @@ def my_input_fn():
                                         
     # Numbers reduced to run on my desktop
     ds = ds.repeat(2)
-    ds = ds.prefetch(1000000)
+    ds = ds.prefetch(5000000)
     ds = ds.shuffle(buffer_size=500000)
-    ds = ds.batch(10000)
+    ds = ds.batch(5000)
     
     def add_labels(arr, lab):
         return({"x": arr}, lab)
@@ -383,7 +385,15 @@ def my_input_fn():
     
 # CNN experiment for training
 # Based off of kmer embeddings
-    
+
+def _add_hidden_layer_summary(value, tag):
+  summary.scalar('%s/fraction_of_zero_values' % tag, nn.zero_fraction(value))
+  summary.histogram('%s/activation' % tag, value)
+
+def _add_layer_summary(value, tag):
+  summary.scalar('%s/fraction_of_zero_values' % tag, nn.zero_fraction(value))
+  summary.histogram('%s/activation' % tag, value)    
+
 # Based off of: https://www.tensorflow.org/tutorials/layers
 def cnn_model_fn(features, labels, mode):
     """Model fn for CNN"""
@@ -401,6 +411,8 @@ def cnn_model_fn(features, labels, mode):
             kernel_size=[5,12],
             padding="same",
             activation=tf.nn.relu)
+
+    tf.image_summary("Visualize_conv1", conv1)
     
     # Our input to pool1 is 5, 128, 32 now....
     pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2, padding="same")
@@ -414,6 +426,8 @@ def cnn_model_fn(features, labels, mode):
             kernel_size=[5, 5],
             padding="same",
             activation=tf.nn.relu)
+
+    tf.image_summary("Visualize_conv2", conv2)
     
     # SO output here is 4 x 60 x 64
     
@@ -426,18 +440,27 @@ def cnn_model_fn(features, labels, mode):
     
     # 1,024 neurons
     dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
+
+    _add_hidden_layer_summary(dense, "Dense")
+    _add_layer_summary(dense, "Dense")
     
-    # Gonna try this but dropout is very high, in my uninformed opinion
+    # Gonna try this but dropout is very high (was 0.4, now 0.3)
     dropout = tf.layers.dropout(
-            inputs=dense, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
+            inputs=dense, rate=0.3, training=mode == tf.estimator.ModeKeys.TRAIN)
     
     # Must have len(replicons_list) neurons
     logits = tf.layers.dense(inputs=dropout, units=len(replicons_list))
+
+    _add_hidden_layer_summary(logits, "Logits")
+    _add_layer_summary(logits, "Logits")
 
     predictions = {
             "classes": tf.argmax(input=logits, axis=1),
              "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
              }
+
+    correct_prediction = tf.equal(tf.argmax(tf.nn.softmax(logits), 1), tf.argmax(labels, 1))
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
     
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
@@ -461,7 +484,10 @@ def cnn_model_fn(features, labels, mode):
                     labels=labels, predictions=predictions["classes"])}
     
     return tf.estimator.EstimatorSpec(
-            mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
+            mode=mode, 
+            loss=loss, 
+            eval_metric_ops=eval_metric_ops, 
+            summary_op=tf.summary.merge_all())
     
 def main(unused_argv):
     classifier = tf.estimator.Estimator(
@@ -477,8 +503,8 @@ def main(unused_argv):
 #            tensors=tensors_to_log, every_n_iter=50)
         
     
-    classifier.train(input_fn=my_input_fn,
-                     steps=10000)
+    classifier.train(input_fn=my_input_fn)
+#                     steps=10000
                      #hooks=[logging_hook])
     
     eval_results = classifier.evaluate(input_fn=my_input_fn, steps=1000)
