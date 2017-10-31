@@ -327,10 +327,15 @@ def my_input_fn():
                                          tf.TensorShape(None)))
                                         
     # Numbers reduced to run on my desktop
-    ds = ds.repeat(2)
-    ds = ds.prefetch(5000000)
-    ds = ds.shuffle(buffer_size=500000)
-    ds = ds.batch(5000)
+#    ds = ds.repeat(2)
+#    ds = ds.prefetch(5000000)
+#    ds = ds.shuffle(buffer_size=500000)
+#    ds = ds.batch(5000)
+    
+    ds = ds.repeat(1)
+    ds = ds.prefetch(1000)
+    ds = ds.shuffle(buffer_size=500)
+    ds = ds.batch(250)
     
     def add_labels(arr, lab):
         return({"x": arr}, lab)
@@ -386,12 +391,8 @@ def my_input_fn():
 # CNN experiment for training
 # Based off of kmer embeddings
 
-def _add_hidden_layer_summary(value, tag):
-  summary.scalar('%s/fraction_of_zero_values' % tag, nn.zero_fraction(value))
-  summary.histogram('%s/activation' % tag, value)
-
 def _add_layer_summary(value, tag):
-  summary.scalar('%s/fraction_of_zero_values' % tag, nn.zero_fraction(value))
+  summary.scalar('%s/fraction_of_zero_values' % tag, tf.nn.zero_fraction(value))
   summary.histogram('%s/activation' % tag, value)    
 
 # Based off of: https://www.tensorflow.org/tutorials/layers
@@ -411,8 +412,10 @@ def cnn_model_fn(features, labels, mode):
             kernel_size=[5,12],
             padding="same",
             activation=tf.nn.relu)
+    
+    #conv1_img = tf.unstack(conv1, axis=3)
 
-    tf.image_summary("Visualize_conv1", conv1)
+    #tf.summary.image("Visualize_conv1", conv1_img)
     
     # Our input to pool1 is 5, 128, 32 now....
     pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2, padding="same")
@@ -426,8 +429,10 @@ def cnn_model_fn(features, labels, mode):
             kernel_size=[5, 5],
             padding="same",
             activation=tf.nn.relu)
+    
+#    conv2_img = tf.expand_dims(tf.unstack(conv2, axis=3), axis=3)
 
-    tf.image_summary("Visualize_conv2", conv2)
+#    tf.summary.image("Visualize_conv2",  conv2_img)
     
     # SO output here is 4 x 60 x 64
     
@@ -441,17 +446,15 @@ def cnn_model_fn(features, labels, mode):
     # 1,024 neurons
     dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
 
-    _add_hidden_layer_summary(dense, "Dense")
     _add_layer_summary(dense, "Dense")
     
     # Gonna try this but dropout is very high (was 0.4, now 0.3)
     dropout = tf.layers.dropout(
-            inputs=dense, rate=0.3, training=mode == tf.estimator.ModeKeys.TRAIN)
+            inputs=dense, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
     
     # Must have len(replicons_list) neurons
     logits = tf.layers.dense(inputs=dropout, units=len(replicons_list))
-
-    _add_hidden_layer_summary(logits, "Logits")
+    
     _add_layer_summary(logits, "Logits")
 
     predictions = {
@@ -459,9 +462,6 @@ def cnn_model_fn(features, labels, mode):
              "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
              }
 
-    correct_prediction = tf.equal(tf.argmax(tf.nn.softmax(logits), 1), tf.argmax(labels, 1))
-    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-    
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
     
@@ -470,6 +470,20 @@ def cnn_model_fn(features, labels, mode):
     loss = tf.losses.softmax_cross_entropy(
             onehot_labels=onehot_labels, logits=logits)
     
+    correct_prediction = tf.equal(tf.argmax(logits, 1), labels)
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+ 
+    #f.summary.text("LogitsArgMax", tf.as_string(tf.argmax(logits, 1)))
+    #tf.summary.text("Labels", tf.as_string(labels))
+    #tf.summary.text("Prediction", tf.as_string(tf.argmax(labels, 1)))
+    
+    
+#    tf.summary.text("Onehot", tf.as_string(onehot_labels))
+#    tf.summary.text("Predictions", tf.as_string(correct_prediction))
+    
+    tf.summary.scalar('Accuracy', accuracy)
+
+    
     # Configure the Training Op (for TRAIN mode)
     if mode == tf.estimator.ModeKeys.TRAIN:
         optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
@@ -477,7 +491,7 @@ def cnn_model_fn(features, labels, mode):
                 loss=loss,
                 global_step=tf.train.get_global_step())
         return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
-    
+   
     # Add evaluation metrics (for EVAL mode)
     eval_metric_ops = {
             "accuracy": tf.metrics.accuracy(
