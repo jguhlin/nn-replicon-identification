@@ -223,6 +223,53 @@ valid_examples = [validation_kmers[i] for i in np.random.choice(len(validation_k
 del validation_kmers
 num_sampled = 256
 
+def embedding_kmer_generator(directory, window_size):
+    files = [directory + "/" + f for f in os.listdir(directory)]
+    random.shuffle(files)
+    
+    window_range = list(range(-window_size, 0))
+    window_range.extend(list(range(1, window_size + 1)))
+
+    def gen_training_data(idata, window_size):
+        for data in idata:
+            for i in xrange(window_size, len(data) + 1 - window_size):
+                for x in window_range:
+                    if (x == (i + x)):
+                        continue
+                    yield kmer_dict[data[i]], kmer_dict[data[i + x]]
+    
+    for f in files:
+        yield from gen_training_data(load_fasta(f), window_size)
+
+window_size = 4
+def my_input_fn():
+    kmer_gen = functools.partial(embedding_kmer_generator, "training-files/", window_size)
+
+    ds = tf.data.Dataset.from_generator(kmer_gen, 
+                                        (tf.int64,
+                                         tf.int64),
+                                        (tf.TensorShape(1),
+                                         tf.TensorShape(None)))
+                                        
+    # Numbers reduced to run on my desktop
+    #ds = ds.repeat(4)
+    #ds = ds.prefetch(5000000)
+    #ds = ds.shuffle(buffer_size=500000)
+    #ds = ds.batch(8000)
+    
+    ds = ds.repeat(1)
+    ds = ds.prefetch(1000)
+    ds = ds.shuffle(buffer_size=500)
+    ds = ds.batch(250)
+    
+    def add_labels(arr, lab):
+        return({"x": arr}, lab)
+    
+    ds = ds.map(add_labels)
+    iterator = ds.make_one_shot_iterator()
+    batch_features, batch_labels = iterator.get_next()
+    return batch_features, batch_labels
+
 graph = tf.Graph()
 
 with graph.as_default():
@@ -276,17 +323,11 @@ print("Loading initial batch data, this could take a few minutes")
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 future = executor.submit(load_fasta, filegen())
 
-tdata = list()
-tdata = future.result()
-print("tdata length: ", str(len(tdata)))
-
 with tf.Session(graph=graph, config=tf.ConfigProto(log_device_placement=False)) as session:
   # We must initialize all variables before we use them.
   init.run()
+  writer = tf.train.SummaryWriter("./kmer-model", session.graph)
   print('Initialized')
-
-  saver.restore(session, "kmer-model-100000")
-  print("Model restored.")
 
   average_loss = 0
   for step in xrange(num_steps):
@@ -317,12 +358,15 @@ with tf.Session(graph=graph, config=tf.ConfigProto(log_device_placement=False)) 
             average_loss /= 1000
             # The average loss is an estimate of the loss over the last 2000 batches.
         print('Average loss at step ', step, ': ', average_loss)
+        tf.summary.merge_all()
+        
         average_loss = 0
         sys.stdout.flush()
     
     # Save every 20k steps
-    if step % 20000 == 0:
+    if step % 500 == 0:
         print("Saving model at step: ", step)
+        tf.summary.merge_all()
         saver.save(session, './kmer-model', global_step=step)
         print("Saved model at step: ", step)
         sys.stdout.flush()
@@ -336,7 +380,9 @@ with tf.Session(graph=graph, config=tf.ConfigProto(log_device_placement=False)) 
 #            top_k = 10
 #            nearest = (-sim[rand_kmer, :]).argsort()[1:top_k + 1]
             
+
   final_embeddings = normalized_embeddings.eval()
+  tf.summary.merge_all()
   saver.save(session, './kmer-model', global_step=step)
   
   np.save("final_embeddings" ,final_embeddings)
