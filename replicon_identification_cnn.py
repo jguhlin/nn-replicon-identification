@@ -1,3 +1,5 @@
+# Next step is to add filename processed to text summary
+
 import tensorflow as tf
 import numpy as np
 import matplotlib as mpl
@@ -102,6 +104,7 @@ def get_kmers_from_seq(sequence):
 data = list()
 
 def load_fasta(filename):
+    # tf.summary.text("File", tf.as_string(filename))
     data = dict()
     file_base_name = ntpath.basename(filename)
     picklefilename = file_base_name + ".picklepickle"
@@ -327,10 +330,10 @@ def my_input_fn():
                                          tf.TensorShape(None)))
                                         
     # Numbers reduced to run on my desktop
-    ds = ds.repeat(4)
-    ds = ds.prefetch(5000000)
-    ds = ds.shuffle(buffer_size=500000)
-    ds = ds.batch(8000)
+    ds = ds.repeat(2)
+    ds = ds.prefetch(400000)
+    ds = ds.shuffle(buffer_size=200000)
+    ds = ds.batch(5000)
     
 #    ds = ds.repeat(1)
 #    ds = ds.prefetch(1000)
@@ -508,9 +511,9 @@ def main(unused_argv):
             model_fn=cnn_model_fn,
             model_dir="classifier_cnn_firsttry",
             config=tf.contrib.learn.RunConfig(
-                    save_checkpoints_steps=5000,
+                    save_checkpoints_steps=1500,
                     save_checkpoints_secs=None,
-                    save_summary_steps=1000))
+                    save_summary_steps=300))
     
 #    tensors_to_log = {"probabilities": "softmax_tensor"}
 #    logging_hook = tf.train.LoggingTensorHook(
