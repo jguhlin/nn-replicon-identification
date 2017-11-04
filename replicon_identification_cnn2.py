@@ -412,7 +412,8 @@ def cnn_model_fn(features, labels, mode):
     conv1 = tf.layers.conv2d(
             inputs=input_layer,
             filters=32,
-            kernel_size=[15,16],
+            kernel_size=[8,64],
+            strides=10,
             padding="same",
             activation=tf.nn.relu)
     
@@ -421,13 +422,13 @@ def cnn_model_fn(features, labels, mode):
     #tf.summary.image("Visualize_conv1", conv1_img)
     
     # Our input to pool1 is 5, 128, 32 now....
-    pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2, padding="same")
+    # pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2, padding="same")
     # So output is....
     # -1 8 x 64 x 32
     
     # Convolutional Layer #2 and Pooling Layer #2
     conv2 = tf.layers.conv2d(
-            inputs=pool1,
+            inputs=conv1,
             filters=64,
             kernel_size=[6, 6],
             padding="same",
