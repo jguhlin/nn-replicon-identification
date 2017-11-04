@@ -330,15 +330,15 @@ def my_input_fn():
                                          tf.TensorShape(None)))
                                         
     # Numbers reduced to run on my desktop
-    ds = ds.repeat(5)
-    ds = ds.prefetch(5000) # Each batch is only 2048, so prefetch 5000
+    ds = ds.repeat(2)
+    ds = ds.prefetch(8192) 
     ds = ds.shuffle(buffer_size=1000000) # Large buffer size for better randomization
-    ds = ds.batch(2048) # Reduced from 5000 so it runs quicker
+    ds = ds.batch(4096) 
     
 #    ds = ds.repeat(1)
-#    ds = ds.prefetch(1000)
-#    ds = ds.shuffle(buffer_size=500)
-#    ds = ds.batch(250)
+#    ds = ds.prefetch(4096)
+#    ds = ds.shuffle(buffer_size=10000)
+#    ds = ds.batch(2048)
     
     def add_labels(arr, lab):
         return({"x": arr}, lab)
@@ -411,9 +411,9 @@ def cnn_model_fn(features, labels, mode):
     # 32 dimensions, 5 x 12 sliding window over entire dataset
     conv1 = tf.layers.conv2d(
             inputs=input_layer,
-            filters=32,
-            kernel_size=[8,64],
-            strides=10,
+            filters=64,
+            kernel_size=[4,32],
+            strides=[1,8],
             padding="same",
             activation=tf.nn.relu)
     
@@ -427,12 +427,13 @@ def cnn_model_fn(features, labels, mode):
     # -1 8 x 64 x 32
     
     # Convolutional Layer #2 and Pooling Layer #2
-    conv2 = tf.layers.conv2d(
-            inputs=conv1,
-            filters=64,
-            kernel_size=[6, 6],
-            padding="same",
-            activation=tf.nn.relu)
+#    conv2 = tf.layers.conv2d(
+#            inputs=conv1,
+#            filters=64,
+#            kernel_size=[2, 2],
+#            strides=[1,4],
+#            padding="same",
+#            activation=tf.nn.relu)
     
 #    conv2_img = tf.expand_dims(tf.unstack(conv2, axis=3), axis=3)
 
@@ -440,15 +441,19 @@ def cnn_model_fn(features, labels, mode):
     
     # SO output here is 4 x 60 x 64
     
+    flatten = tf.reshape(conv1, [-1, 15 * 16, 64])
+    
     # So now should be -1, 8, 64, 64
-    pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
+    # pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
+    #tf.layers.max_pooling1d(inputs=flatten, pool_size=)
+    avg_pooled = tf.layers.average_pooling1d(flatten, pool_size=10, strides=5, padding="same", name="AvgPooling")
     
     # pool2 reduces by half again
     # So -1, 4, 32, 64
-    pool2_flat = tf.reshape(pool2, [-1, 4 * 32 * 64])
+    pool2_flat = tf.reshape(avg_pooled, [-1, 3072]) # 4 * 32 * 64 = 8192
     
     # 1,024 neurons
-    dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
+    dense = tf.layers.dense(inputs=pool2_flat, units=2048, activation=tf.nn.relu)
 
     _add_layer_summary(dense, "Dense")
     
