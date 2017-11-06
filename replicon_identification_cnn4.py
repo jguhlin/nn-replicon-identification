@@ -446,37 +446,54 @@ def cnn_model_fn(features, labels, mode):
     # 32 dimensions, 5 x 12 sliding window over entire dataset
     conv1 = tf.layers.conv1d(
             inputs=embedded_kmers,
-            filters=32,
+            filters=64,
             kernel_size=128 * 2, # Each word is 128, so * 2 are 2-9mers
             strides=128, # Stride of 1 word
             padding="same",
+            name="Conv1",
             activation=tf.nn.relu)
     
     conv2 = tf.layers.conv1d(
             inputs=embedded_kmers,
-            filters=32,
+            filters=64,
             kernel_size=128 * 3, # Each word is 128, so * 2 are 2-9mers
             strides=128, # Stride of 1 word
             padding="same",
+            name="Conv2",
             activation=tf.nn.relu)
     
     conv3 = tf.layers.conv1d(
             inputs=embedded_kmers,
-            filters=32,
+            filters=64,
             kernel_size=128 * 5, # Each word is 128, so * 2 are 2-9mers
             strides=128, # Stride of 1 word
             padding="same",
+            name="Conv3",
             activation=tf.nn.relu)
+    
+    conv4 = tf.layers.conv1d(
+            inputs=embedded_kmers,
+            filters=64,
+            kernel_size=320, # 2.5 words # Each word is 128, so * 2 are 2-9mers
+            strides=128, # Stride of 1 word
+            padding="same",
+            name="Conv4",
+            activation=tf.nn.relu)
+
     
 #    avg_pool1 = tf.layers.average_pooling1d(conv1, pool_size=4, strides=2, padding="same", name="AvgPooling_1")
 #    avg_pool2 = tf.layers.average_pooling1d(conv2, pool_size=4, strides=2, padding="same", name="AvgPooling_2")
 #    avg_pool3 = tf.layers.average_pooling1d(conv3, pool_size=4, strides=2, padding="same", name="AvgPooling_3")
     
-    pool1 = tf.layers.max_pooling1d(conv1, pool_size=4, strides=2, padding="same", name="Pool1")
-    pool2 = tf.layers.max_pooling1d(conv2, pool_size=4, strides=2, padding="same", name="Pool2")
-    pool3 = tf.layers.max_pooling1d(conv3, pool_size=4, strides=2, padding="same", name="Pool3")
+#    pool1 = tf.layers.max_pooling1d(conv1, pool_size=4, strides=2, padding="same", name="Pool1")
+#    pool2 = tf.layers.max_pooling1d(conv2, pool_size=4, strides=2, padding="same", name="Pool2")
+#    pool3 = tf.layers.max_pooling1d(conv3, pool_size=4, strides=2, padding="same", name="Pool3")
+#    pool4 = tf.layers.max_pooling1d(conv4, pool_size=4, strides=2, padding="same", name="Pool4")
     
-    all_pools = tf.concat([pool1, pool2, pool3], 2)
+#    all_pools = tf.concat([pool1, pool2, pool3, pool4], 2)
+    all_pools = tf.concat([conv1, conv2, conv3, conv4], 1)
+    flatten = tf.reshape(all_pools, [-1, 256])
+
     
     #conv1_img = tf.unstack(conv1, axis=3)
 
@@ -514,7 +531,7 @@ def cnn_model_fn(features, labels, mode):
     # pool2_flat = tf.reshape(avg_pool1, [-1, 2048]) # 4 * 32 * 64 = 8192
     
     # 1,024 neurons
-    dense = tf.layers.dense(inputs=all_pools, units=1024, activation=tf.nn.relu)
+    dense = tf.layers.dense(inputs=flatten, units=2048, activation=tf.nn.relu)
 
     _add_layer_summary(dense, "Dense")
     
