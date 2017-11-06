@@ -518,8 +518,11 @@ def cnn_model_fn(features, labels, mode):
 
     _add_layer_summary(dense, "Dense")
     
+    # 0.5 is suggested for CNNs
+    # 0.2 makes the system memorize the data
+    # Trying 0.4, may switch to 0.3 or 0.5 again.
     dropout = tf.layers.dropout(
-            inputs=dense, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
+            inputs=dense, rate=0.3, training=mode == tf.estimator.ModeKeys.TRAIN)
     
     # Must have len(replicons_list) neurons
     logits = tf.layers.dense(inputs=dropout, units=len(replicons_list))
