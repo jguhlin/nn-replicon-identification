@@ -468,11 +468,15 @@ def cnn_model_fn(features, labels, mode):
             padding="same",
             activation=tf.nn.relu)
     
-    avg_pool1 = tf.layers.average_pooling1d(conv1, pool_size=2, strides=2, padding="same", name="AvgPooling_1")
-    avg_pool2 = tf.layers.average_pooling1d(conv2, pool_size=2, strides=2, padding="same", name="AvgPooling_2")
-    avg_pool3 = tf.layers.average_pooling1d(conv3, pool_size=2, strides=2, padding="same", name="AvgPooling_3")
+#    avg_pool1 = tf.layers.average_pooling1d(conv1, pool_size=4, strides=2, padding="same", name="AvgPooling_1")
+#    avg_pool2 = tf.layers.average_pooling1d(conv2, pool_size=4, strides=2, padding="same", name="AvgPooling_2")
+#    avg_pool3 = tf.layers.average_pooling1d(conv3, pool_size=4, strides=2, padding="same", name="AvgPooling_3")
     
-    all_pools = tf.concat([avg_pool1, avg_pool2, avg_pool3], 2)
+    pool1 = tf.layers.max_pooling1d(conv1, pool_size=4, strides=2, padding="same", name="Pool1")
+    pool2 = tf.layers.max_pooling1d(conv2, pool_size=4, strides=2, padding="same", name="Pool2")
+    pool3 = tf.layers.max_pooling1d(conv3, pool_size=4, strides=2, padding="same", name="Pool3")
+    
+    all_pools = tf.concat([pool1, pool2, pool3], 2)
     
     #conv1_img = tf.unstack(conv1, axis=3)
 
