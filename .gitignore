@@ -25,3 +25,4 @@ training-files/*
 *.gz
 iris_training.csv
 *.csv
+classifier*/

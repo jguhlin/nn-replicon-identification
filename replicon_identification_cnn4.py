@@ -348,11 +348,6 @@ def my_input_fn():
                                         kmer_generator("training-files/", window_size),
                                         kmer_generator("training-files/", window_size),
                                         kmer_generator("training-files/", window_size),
-                                        kmer_generator("training-files/", window_size),
-                                        kmer_generator("training-files/", window_size),
-                                        kmer_generator("training-files/", window_size),
-                                        kmer_generator("training-files/", window_size),
-                                        kmer_generator("training-files/", window_size),
                                         kmer_generator("training-files/", window_size))
     
 #    alternate_gens = functools.partial(alternate, kmer_gen, kmer_gen1, kmer_gen2, kmer_gen3)
