@@ -436,6 +436,8 @@ def cnn_model_fn(features, labels, mode):
     
     embeddings = tf.get_variable("embeddings", trainable=False, initializer=embeddings_stored)
     embedded_kmers = tf.nn.embedding_lookup(embeddings, features["x"])
+
+    shaped = tf.reshape(embedded_kmers, [-1, 1920])
     
     # Input layer
     # So inputs are 1920, or 15 * 128, and "1" deep (which is a float)
@@ -445,40 +447,40 @@ def cnn_model_fn(features, labels, mode):
     # So 1920 <= 32 * 5 * 12
     # 32 dimensions, 5 x 12 sliding window over entire dataset
     conv1 = tf.layers.conv1d(
-            inputs=embedded_kmers,
+            inputs=shaped,
             filters=64,
             kernel_size=128 * 2, # Each word is 128, so * 2 are 2-9mers
             strides=128, # Stride of 1 word
             padding="same",
             name="Conv1",
-            activation=tf.nn.relu)
+            activation=tf.sigmoid)
     
     conv2 = tf.layers.conv1d(
-            inputs=embedded_kmers,
+            inputs=shaped,
             filters=64,
             kernel_size=128 * 3, # Each word is 128, so * 2 are 2-9mers
             strides=128, # Stride of 1 word
             padding="same",
             name="Conv2",
-            activation=tf.nn.relu)
+            activation=tf.sigmoid)
     
     conv3 = tf.layers.conv1d(
-            inputs=embedded_kmers,
+            inputs=shaped,
             filters=64,
             kernel_size=128 * 5, # Each word is 128, so * 2 are 2-9mers
             strides=128, # Stride of 1 word
             padding="same",
             name="Conv3",
-            activation=tf.nn.relu)
+            activation=tf.tanh)
     
     conv4 = tf.layers.conv1d(
-            inputs=embedded_kmers,
+            inputs=shaped,
             filters=64,
             kernel_size=320, # 2.5 words # Each word is 128, so * 2 are 2-9mers
             strides=128, # Stride of 1 word
             padding="same",
             name="Conv4",
-            activation=tf.nn.relu)
+            activation=tf.sigmoid)
 
     
 #    avg_pool1 = tf.layers.average_pooling1d(conv1, pool_size=4, strides=2, padding="same", name="AvgPooling_1")
@@ -531,7 +533,11 @@ def cnn_model_fn(features, labels, mode):
     # pool2_flat = tf.reshape(avg_pool1, [-1, 2048]) # 4 * 32 * 64 = 8192
     
     # 1,024 neurons
-    dense = tf.layers.dense(inputs=flatten, units=2048, activation=tf.nn.relu)
+    dropout1 = tf.layers.dropout(inputs=flatten, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
+
+    dense = tf.layers.dense(inputs=dropout1, units=2048, activation=tf.nn.relu)
+
+    dense2 = tf.layers.dense(input=dense, units=1024, activation=tf.nn.relu)
 
     _add_layer_summary(dense, "Dense")
     
@@ -539,7 +545,7 @@ def cnn_model_fn(features, labels, mode):
     # 0.2 makes the system memorize the data
     # Trying 0.4, may switch to 0.3 or 0.5 again.
     dropout = tf.layers.dropout(
-            inputs=dense, rate=0.3, training=mode == tf.estimator.ModeKeys.TRAIN)
+            inputs=dense, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
     
     # Must have len(replicons_list) neurons
     logits = tf.layers.dense(inputs=dropout, units=len(replicons_list))
