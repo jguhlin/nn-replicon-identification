@@ -314,7 +314,8 @@ def kmer_generator(directory, window_size):
         a += 1
     
     for f in files:
-        yield from gen_training_data_generator(load_fasta(f), window_size, repdict)
+        fasta = load_fasta(f)
+        yield from gen_training_data_generator(fasta, window_size, repdict)
         
 # Plan to use tf.data.Dataset.from_generator
 # ds = tf.contrib.data.Dataset.list_files("training-files/").map(tf_load_fasta)
@@ -330,15 +331,15 @@ def my_input_fn():
                                          tf.TensorShape(None)))
                                         
     # Numbers reduced to run on my desktop
-    ds = ds.repeat(2)
-    ds = ds.prefetch(8192) 
-    ds = ds.shuffle(buffer_size=1000000) # Large buffer size for better randomization
-    ds = ds.batch(4096) 
+#    ds = ds.repeat(2)
+#    ds = ds.prefetch(8192) 
+#    ds = ds.shuffle(buffer_size=1000000) # Large buffer size for better randomization
+#    ds = ds.batch(4096) 
     
-#    ds = ds.repeat(1)
-#    ds = ds.prefetch(4096)
-#    ds = ds.shuffle(buffer_size=10000)
-#    ds = ds.batch(2048)
+    ds = ds.repeat(1)
+    ds = ds.prefetch(4096)
+    ds = ds.shuffle(buffer_size=10000)
+    ds = ds.batch(2048)
     
     def add_labels(arr, lab):
         return({"x": arr}, lab)
@@ -394,6 +395,12 @@ def my_input_fn():
 # CNN experiment for training
 # Based off of kmer embeddings
 
+embeddings_stored = np.load("final_embeddings.npy")    
+
+def embeddings_initializer():
+    embeddings = np.load("final_embeddings.npy")
+    return embeddings
+
 def _add_layer_summary(value, tag):
   summary.scalar('%s/fraction_of_zero_values' % tag, tf.nn.zero_fraction(value))
   summary.histogram('%s/activation' % tag, value)    
@@ -401,10 +408,13 @@ def _add_layer_summary(value, tag):
 # Based off of: https://www.tensorflow.org/tutorials/layers
 def cnn_model_fn(features, labels, mode):
     """Model fn for CNN"""
+    # , [len(all_kmers), 128]
+    embeddings = tf.get_variable("embeddings", trainable=False, initializer=embeddings_stored)
+    embedded_kmers = tf.nn.embedding_lookup(embeddings, features["x"])
     
     # Input layer
     # So inputs are 1920, or 15 * 128, and "1" deep (which is a float)
-    input_layer = tf.reshape(features["x"], [-1, 15, 128, 1])
+    input_layer = tf.reshape(embedded_kmers, [-1, 15, 128, 1])
     
     # filters * kernelsize[0] * kernel_size[1] must be > input_layer_size
     # So 1920 <= 32 * 5 * 12
