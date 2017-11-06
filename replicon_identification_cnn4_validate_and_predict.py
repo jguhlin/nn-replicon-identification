@@ -299,7 +299,7 @@ def gen_training_data_generator(input_data, window_size, repdict):
                 kentry = list()
                 for x in range(i - window_size - 1, i + window_size):
                     kentry.append(kmer_dict[kdata[x]])
-                yield(get_kmer_embeddings(kentry), [repdict[k]])
+                yield(kentry, [repdict[k]])
 
 # Not infinite
 def kmer_generator(directory, window_size):
@@ -325,9 +325,9 @@ def my_input_fn():
     kmer_gen = functools.partial(kmer_generator, "training-files/", window_size)
 
     ds = tf.data.Dataset.from_generator(kmer_gen, 
-                                        (tf.float32,
+                                        (tf.int64,
                                          tf.int64),
-                                        (tf.TensorShape([15,128]),
+                                        (tf.TensorShape([15]),
                                          tf.TensorShape(None)))
                                         
     # Numbers reduced to run on my desktop
@@ -397,10 +397,6 @@ def my_input_fn():
 
 embeddings_stored = np.load("final_embeddings.npy")    
 
-def embeddings_initializer():
-    embeddings = np.load("final_embeddings.npy")
-    return embeddings
-
 def _add_layer_summary(value, tag):
   summary.scalar('%s/fraction_of_zero_values' % tag, tf.nn.zero_fraction(value))
   summary.histogram('%s/activation' % tag, value)    
@@ -409,6 +405,7 @@ def _add_layer_summary(value, tag):
 def cnn_model_fn(features, labels, mode):
     """Model fn for CNN"""
     # , [len(all_kmers), 128]
+    
     embeddings = tf.get_variable("embeddings", trainable=False, initializer=embeddings_stored)
     embedded_kmers = tf.nn.embedding_lookup(embeddings, features["x"])
     
@@ -519,13 +516,12 @@ def cnn_model_fn(features, labels, mode):
     return tf.estimator.EstimatorSpec(
             mode=mode, 
             loss=loss, 
-            eval_metric_ops=eval_metric_ops, 
-            summary_op=tf.summary.merge_all())
+            eval_metric_ops=eval_metric_ops)
     
 def main(unused_argv):
     classifier = tf.estimator.Estimator(
             model_fn=cnn_model_fn,
-            model_dir="classifier_cnn2",
+            model_dir="classifier_cnn4",
             config=tf.contrib.learn.RunConfig(
                     save_checkpoints_steps=1500,
                     save_checkpoints_secs=None,
@@ -536,10 +532,9 @@ def main(unused_argv):
 #            tensors=tensors_to_log, every_n_iter=50)
         
     
-    classifier.train(input_fn=my_input_fn)
+#    classifier.train(input_fn=my_input_fn)
 #                     steps=10000
                      #hooks=[logging_hook])
-    
     eval_results = classifier.evaluate(input_fn=my_input_fn, steps=1000)
     print(eval_results)
     

@@ -26,6 +26,8 @@ import ntpath
 import os.path
 import sys
 from tensorflow.python.summary import summary
+from collections import deque
+import itertools
 
 
 # k-mer size to use
@@ -320,11 +322,37 @@ def kmer_generator(directory, window_size):
 # Plan to use tf.data.Dataset.from_generator
 # ds = tf.contrib.data.Dataset.list_files("training-files/").map(tf_load_fasta)
 
-
+def roundrobin(*iterables):
+    "roundrobin('ABC', 'D', 'EF') --> A D E B F C"
+    # Recipe credited to George Sakkis
+    pending = len(iterables)
+    nexts = itertools.cycle(iter(it).__next__ for it in iterables)
+    while pending:
+        try:
+            for next in nexts:
+                yield next()
+        except StopIteration:
+            pending -= 1
+            nexts = itertools.cycle(itertools.islice(nexts, pending))
+            
 def my_input_fn():
-    kmer_gen = functools.partial(kmer_generator, "training-files/", window_size)
+#    kmer_gen = functools.partial(kmer_generator, "training-files/", window_size)
+#    kmer_gen1 = functools.partial(kmer_generator, "training-files/", window_size)
+#    kmer_gen2 = functools.partial(kmer_generator, "training-files/", window_size)
+#    kmer_gen3 = functools.partial(kmer_generator, "training-files/", window_size)
+    
+    # Round robin 3 files...
+    # This will also cause everything to repeat 3 times
+    # Would be best to round robin all files at once and only repeat once (let tf.data.Dataset handle repeats)
+    rr = functools.partial(roundrobin, kmer_generator("training-files/", window_size),
+                                        kmer_generator("training-files/", window_size),
+                                        kmer_generator("training-files/", window_size),
+                                        kmer_generator("training-files/", window_size),
+                                        kmer_generator("training-files/", window_size))
+    
+#    alternate_gens = functools.partial(alternate, kmer_gen, kmer_gen1, kmer_gen2, kmer_gen3)
 
-    ds = tf.data.Dataset.from_generator(kmer_gen, 
+    ds = tf.data.Dataset.from_generator(rr, 
                                         (tf.int64,
                                          tf.int64),
                                         (tf.TensorShape([15]),
@@ -411,18 +439,61 @@ def cnn_model_fn(features, labels, mode):
     
     # Input layer
     # So inputs are 1920, or 15 * 128, and "1" deep (which is a float)
-    input_layer = tf.reshape(embedded_kmers, [-1, 15, 128, 1])
+    # input_layer = tf.reshape(embedded_kmers, [-1, 15, 128, 1])
     
     # filters * kernelsize[0] * kernel_size[1] must be > input_layer_size
     # So 1920 <= 32 * 5 * 12
     # 32 dimensions, 5 x 12 sliding window over entire dataset
-    conv1 = tf.layers.conv2d(
-            inputs=input_layer,
+    conv1 = tf.layers.conv1d(
+            inputs=embedded_kmers,
             filters=64,
-            kernel_size=[4,32],
-            strides=[1,8],
+            kernel_size=128 * 2, # Each word is 128, so * 2 are 2-9mers
+            strides=128, # Stride of 1 word
             padding="same",
+            name="Conv1",
             activation=tf.nn.relu)
+    
+    conv2 = tf.layers.conv1d(
+            inputs=embedded_kmers,
+            filters=64,
+            kernel_size=128 * 3, # Each word is 128, so * 2 are 2-9mers
+            strides=128, # Stride of 1 word
+            padding="same",
+            name="Conv2",
+            activation=tf.nn.relu)
+    
+    conv3 = tf.layers.conv1d(
+            inputs=embedded_kmers,
+            filters=64,
+            kernel_size=128 * 5, # Each word is 128, so * 2 are 2-9mers
+            strides=128, # Stride of 1 word
+            padding="same",
+            name="Conv3",
+            activation=tf.nn.relu)
+    
+    conv4 = tf.layers.conv1d(
+            inputs=embedded_kmers,
+            filters=64,
+            kernel_size=320, # 2.5 words # Each word is 128, so * 2 are 2-9mers
+            strides=128, # Stride of 1 word
+            padding="same",
+            name="Conv4",
+            activation=tf.nn.relu)
+
+    
+#    avg_pool1 = tf.layers.average_pooling1d(conv1, pool_size=4, strides=2, padding="same", name="AvgPooling_1")
+#    avg_pool2 = tf.layers.average_pooling1d(conv2, pool_size=4, strides=2, padding="same", name="AvgPooling_2")
+#    avg_pool3 = tf.layers.average_pooling1d(conv3, pool_size=4, strides=2, padding="same", name="AvgPooling_3")
+    
+#    pool1 = tf.layers.max_pooling1d(conv1, pool_size=4, strides=2, padding="same", name="Pool1")
+#    pool2 = tf.layers.max_pooling1d(conv2, pool_size=4, strides=2, padding="same", name="Pool2")
+#    pool3 = tf.layers.max_pooling1d(conv3, pool_size=4, strides=2, padding="same", name="Pool3")
+#    pool4 = tf.layers.max_pooling1d(conv4, pool_size=4, strides=2, padding="same", name="Pool4")
+    
+#    all_pools = tf.concat([pool1, pool2, pool3, pool4], 2)
+    all_pools = tf.concat([conv1, conv2, conv3, conv4], 1)
+    flatten = tf.reshape(all_pools, [-1, 256])
+
     
     #conv1_img = tf.unstack(conv1, axis=3)
 
@@ -448,25 +519,27 @@ def cnn_model_fn(features, labels, mode):
     
     # SO output here is 4 x 60 x 64
     
-    flatten = tf.reshape(conv1, [-1, 15 * 16, 64])
+    # flatten = tf.reshape(conv1, [-1, 15 * 16, 32], name = "Flatten")
     
     # So now should be -1, 8, 64, 64
     # pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
     #tf.layers.max_pooling1d(inputs=flatten, pool_size=)
-    avg_pooled = tf.layers.average_pooling1d(flatten, pool_size=10, strides=5, padding="same", name="AvgPooling")
+    # avg_pooled = tf.layers.average_pooling1d(flatten, pool_size=10, strides=5, padding="same", name="AvgPooling")
     
     # pool2 reduces by half again
     # So -1, 4, 32, 64
-    pool2_flat = tf.reshape(avg_pooled, [-1, 3072]) # 4 * 32 * 64 = 8192
+    # pool2_flat = tf.reshape(avg_pool1, [-1, 2048]) # 4 * 32 * 64 = 8192
     
     # 1,024 neurons
-    dense = tf.layers.dense(inputs=pool2_flat, units=2048, activation=tf.nn.relu)
+    dense = tf.layers.dense(inputs=flatten, units=2048, activation=tf.nn.relu)
 
     _add_layer_summary(dense, "Dense")
     
-    # Gonna try this but dropout is very high (was 0.4, now 0.2)
+    # 0.5 is suggested for CNNs
+    # 0.2 makes the system memorize the data
+    # Trying 0.4, may switch to 0.3 or 0.5 again.
     dropout = tf.layers.dropout(
-            inputs=dense, rate=0.2, training=mode == tf.estimator.ModeKeys.TRAIN)
+            inputs=dense, rate=0.3, training=mode == tf.estimator.ModeKeys.TRAIN)
     
     # Must have len(replicons_list) neurons
     logits = tf.layers.dense(inputs=dropout, units=len(replicons_list))
@@ -524,7 +597,7 @@ def main(unused_argv):
             model_fn=cnn_model_fn,
             model_dir="classifier_cnn4",
             config=tf.contrib.learn.RunConfig(
-                    save_checkpoints_steps=1500,
+                    save_checkpoints_steps=1000,
                     save_checkpoints_secs=None,
                     save_summary_steps=100))
     

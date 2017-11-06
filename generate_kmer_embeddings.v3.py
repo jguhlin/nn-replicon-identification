@@ -1,16 +1,23 @@
 import tensorflow as tf
 import numpy as np
+from collections import Counter
+import collections
 import random
+from six.moves import urllib
 from six.moves import xrange  # pylint: disable=redefined-builtin
+import Bio
 from Bio import SeqIO
 import os
 import concurrent.futures
 import functools
+from functools import partial
 import math
+import threading
+import time
+import random
+from random import shuffle
 import pickle
 import sys
-
-# Version 2, with tensorboard support
 
 # k-mer size to use
 k = 9
@@ -137,10 +144,15 @@ all_kmers = list()
 #     for line in f:
 #         all_kmers.append(int(line.strip()))
 
-# All kmer's in the dataset
-# Already calculated so not recalculated
 all_kmers = pickle.load(open("all_kmers.p", "rb"))
+
 all_kmers = set(all_kmers)
+len(all_kmers)
+
+# len(data)
+
+# all_kmers = set([item for sublist in data for item in sublist])
+unused_kmers = set(range(0, space)) - all_kmers
 
 kmer_dict = dict()
 reverse_kmer_dict = dict();
@@ -150,9 +162,67 @@ for i in all_kmers:
     kmer_dict[i] = a
     reverse_kmer_dict[a] = i
     a += 1
+    
+kmer_count = len(all_kmers)
 
+print([len(all_kmers), len(unused_kmers), space])
 
-# Diff name to not be confused with replicon identification
+# sys.exit(0)
+
+def gen_random_training_data(input_data, window_size):
+    idx = random.randrange(0, len(input_data))
+    training_data = list();
+    for i in range(idx - window_size, idx + window_size):
+        if (i < 0): continue
+        if (i >= len(input_data)): break
+        if (i == idx): continue
+        if type(input_data[idx]) == list: break;
+        if type(input_data[i]) == list: break
+        training_data.append([kmer_dict[input_data[idx]], kmer_dict[input_data[i]]])
+    return training_data
+
+def training_file_generator(directory):
+    files = [directory + "/" + f for f in os.listdir(directory)]
+    random.shuffle(files)
+    def gen():
+        nonlocal files
+        if (len(files) == 0):
+            files = [directory + "/" + f for f in os.listdir(directory)]
+            random.shuffle(files)
+        return(files.pop())
+    return gen
+
+# The current state is, each training batch is from a single FASTA file (strain, usually)
+# This can be ok, as long as training batch is a large number
+# Need to speed up reading of FASTA files though, maybe pyfaidx or something?
+
+def generate_training_batch(data, batch_size, window_size):
+#    data = list()
+#    data = load_fasta(filefn())
+    training_data = list();
+    while len(training_data) < batch_size:
+         training_data.extend(gen_random_training_data(random.choice(data), window_size))
+    return training_data[:batch_size]
+        
+
+filegen = training_file_generator("rapid-start/")
+
+training_data = load_fasta(filegen())
+
+window_size = 4
+
+validation_set = generate_training_batch(training_data, 100000, window_size)
+validation_kmers = list(set([i[0] for i in validation_set]))
+del validation_set
+
+# We pick a random validation set to sample nearest neighbors. Here we limit the
+# validation samples to the words that have a low numeric ID, which by
+# construction are also the most frequent.
+valid_size = 1048
+valid_examples = [validation_kmers[i] for i in np.random.choice(len(validation_kmers), valid_size, replace=False)]
+del validation_kmers
+num_sampled = 64
+
 def embedding_kmer_generator(directory, window_size):
     files = [directory + "/" + f for f in os.listdir(directory)]
     random.shuffle(files)
@@ -171,9 +241,18 @@ def embedding_kmer_generator(directory, window_size):
     for f in files:
         yield from gen_training_data(load_fasta(f), window_size)
 
+batch_size = 256
 window_size = 4
-def my_input_fn():
-    kmer_gen = functools.partial(embedding_kmer_generator, "training-files/", window_size)
+
+graph = tf.Graph()
+
+embedding_size = 512
+
+with graph.as_default():
+    
+  def my_input_fn():
+    #kmer_gen = functools.partial(embedding_kmer_generator, "training-files/", window_size)
+    kmer_gen = functools.partial(embedding_kmer_generator, "rapid-start/", window_size)
 
     ds = tf.data.Dataset.from_generator(kmer_gen, 
                                         (tf.int64,
@@ -182,15 +261,15 @@ def my_input_fn():
                                          tf.TensorShape(None)))
                                         
     # Numbers reduced to run on my desktop
-    #ds = ds.repeat(4)
-    #ds = ds.prefetch(5000000)
+    #ds = ds.repeat(5)
+    #ds = ds.prefetch(10000)
     #ds = ds.shuffle(buffer_size=500000)
-    #ds = ds.batch(8000)
+    #ds = ds.batch(batch_size)
     
     ds = ds.repeat(1)
     ds = ds.prefetch(1000)
-    ds = ds.shuffle(buffer_size=500)
-    ds = ds.batch(250)
+    ds = ds.shuffle(buffer_size=1000)
+    ds = ds.batch(batch_size)
     
     def add_labels(arr, lab):
         return({"x": arr}, lab)
@@ -200,42 +279,71 @@ def my_input_fn():
     batch_features, batch_labels = iterator.get_next()
     return batch_features, batch_labels
 
-def _add_layer_summary(value, tag):
-  tf.summary.scalar('%s/fraction_of_zero_values' % tag, tf.nn.zero_fraction(value))
-  tf.summary.histogram('%s/activation' % tag, value)    
-
-batch_size = 8196
-num_sampled = 1024
-
-embedding_size = 1024
-    
-def main(unused_argv):
-    classifier = tf.estimator.Estimator(
-            model_fn=cnn_model_fn,
-            model_dir="classifier_cnn_firsttry",
-            config=tf.contrib.learn.RunConfig(
-                    save_checkpoints_steps=5000,
-                    save_checkpoints_secs=None,
-                    save_summary_steps=1000))
-    
-#    tensors_to_log = {"probabilities": "softmax_tensor"}
-#    logging_hook = tf.train.LoggingTensorHook(
-#            tensors=tensors_to_log, every_n_iter=50)
-        
-    
-    classifier.train(input_fn=my_input_fn)
-#                     steps=10000
-                     #hooks=[logging_hook])
-    
-    eval_results = classifier.evaluate(input_fn=my_input_fn, steps=1000)
-    print(eval_results)
-    
-#  final_embeddings = normalized_embeddings.eval()
-#  saver.save(session, './kmer-model', global_step=step)
-
-    
-if __name__ == "__main__":
-  tf.app.run()
-
+  # Input data.
+  train_inputs = tf.placeholder(tf.int32, shape=[batch_size])
+  train_labels = tf.placeholder(tf.int32, shape=[batch_size, 1])
+  valid_dataset = tf.constant(valid_examples, dtype=tf.int32)
   
-  np.save("final_embeddings" ,final_embeddings)
+  embeddings = tf.Variable(
+      tf.random_uniform([kmer_count, embedding_size], -1.0, 1.0))
+  embed = tf.nn.embedding_lookup(embeddings, train_inputs)
+
+  # Construct the variables for the NCE loss
+  nce_weights = tf.Variable(
+      tf.truncated_normal([kmer_count, embedding_size],
+                          stddev=1.0 / math.sqrt(embedding_size)))
+  nce_biases = tf.Variable(tf.zeros([kmer_count]))
+
+  # Compute the average NCE loss for the batch.
+  # tf.nce_loss automatically draws a new sample of the negative labels each
+  # time we evaluate the loss.
+  loss = tf.reduce_mean(
+      tf.nn.nce_loss(weights=nce_weights,
+                     biases=nce_biases,
+                     labels=train_labels,
+                     inputs=embed,
+                     num_sampled=num_sampled,
+                     num_classes=kmer_count))
+
+  # Construct the SGD optimizer using a learning rate of 1.0.
+  optimizer = tf.train.GradientDescentOptimizer(0.9).minimize(loss)
+  # optimizer = tf.train.AdagradOptimizer(1.0).minimize(loss)
+
+  # Compute the cosine similarity between minibatch examples and all embeddings.
+  norm = tf.sqrt(tf.reduce_sum(tf.square(embeddings), 1, keep_dims=True))
+  normalized_embeddings = embeddings / norm
+  valid_embeddings = tf.nn.embedding_lookup(normalized_embeddings, valid_dataset)
+  similarity = tf.matmul(valid_embeddings, normalized_embeddings, transpose_b=True)
+
+  # Add variable initializer.
+#  init = tf.global_variables_initializer()
+#  saver = tf.train.Saver()
+  
+  global_step = tf.train.get_or_create_global_step()
+  train_op = tf.train.GradientDescentOptimizer(0.8).minimize(loss, global_step=global_step)
+
+  with tf.train.MonitoredTrainingSession(master='', is_chief=True, checkpoint_dir="./kmer-model512") as sess:
+      while not sess.should_stop():
+          sess.run(train_op, feed_dict=my_input_fn())
+
+  print("Loading initial batch data, this could take a few minutes")
+
+# v3 here does 2 things
+# Uses a dataset so we knowingly hit ALL kmers
+# also changes embedding_size = 256 due to the larger kmer space
+
+#with tf.Session(graph=graph, config=tf.ConfigProto(log_device_placement=False)) as session:
+  # We must initialize all variables before we use them.
+# sv = tf.train.Supervisor(logdir="./kmer-model512/",  graph=graph)
+# sv.PrepareSession(config = tf.ConfigProto(log_device_placement=False), master='local')
+# init.run()
+
+#with graph.as_default():
+            #sess.run([optimizer, loss], feed=my_input_fn())
+  
+#  tf.train.write_graph(session.graph_def, "./kmer-model2048/", "train.pbtxt")
+  
+  # writer = tf.train.SummaryWriter("./kmer-model2048/", session.graph)
+
+final_embeddings = normalized_embeddings.eval()
+np.save("final_embeddings512" ,final_embeddings)
