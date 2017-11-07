@@ -367,7 +367,7 @@ def my_input_fn():
     ds = ds.repeat(1)
     ds = ds.prefetch(4096)
     ds = ds.shuffle(buffer_size=10000)
-    ds = ds.batch(2048)
+    ds = ds.batch(512)
     
     def add_labels(arr, lab):
         return({"x": arr}, lab)
@@ -437,55 +437,62 @@ def cnn_model_fn(features, labels, mode):
     embeddings = tf.get_variable("embeddings", trainable=False, initializer=embeddings_stored)
     embedded_kmers = tf.nn.embedding_lookup(embeddings, features["x"])
 
-    shaped = tf.reshape(embedded_kmers, [-1, 1920])
+    # shaped = tf.reshape(embedded_kmers, [-1, 1920])
     
     # Input layer
     # So inputs are 1920, or 15 * 128, and "1" deep (which is a float)
-    # input_layer = tf.reshape(embedded_kmers, [-1, 15, 128, 1])
+    input_layer = tf.reshape(embedded_kmers, [-1, 15, 128, 1])
     
     # filters * kernelsize[0] * kernel_size[1] must be > input_layer_size
     # So 1920 <= 32 * 5 * 12
-    # 32 dimensions, 5 x 12 sliding window over entire dataset
-    conv1 = tf.layers.conv1d(
-            inputs=shaped,
-            filters=64,
-            kernel_size=128 * 2, # Each word is 128, so * 2 are 2-9mers
-            strides=128, # Stride of 1 word
+    conv1 = tf.layers.conv2d(
+            inputs=input_layer,
+            filters=32,
+            kernel_size=[2,128], 
+            strides=3, 
             padding="same",
             name="Conv1",
-            activation=tf.sigmoid)
+            activation=None) # With all 3 at tf.sigmoid getting ~ 80% accuracy and 0.5 loss
     
-    conv2 = tf.layers.conv1d(
-            inputs=shaped,
-            filters=64,
-            kernel_size=128 * 3, # Each word is 128, so * 2 are 2-9mers
-            strides=128, # Stride of 1 word
+    conv2 = tf.layers.conv2d(
+            inputs=input_layer,
+            filters=32,
+            kernel_size=[3, 128], 
+            strides=3, 
             padding="same",
             name="Conv2",
-            activation=tf.sigmoid)
+            activation=None)
     
-    conv3 = tf.layers.conv1d(
-            inputs=shaped,
-            filters=64,
-            kernel_size=128 * 5, # Each word is 128, so * 2 are 2-9mers
-            strides=128, # Stride of 1 word
+    conv3 = tf.layers.conv2d(
+            inputs=input_layer,
+            filters=32,
+            kernel_size=[5, 128], 
+            strides=3, 
             padding="same",
             name="Conv3",
-            activation=tf.tanh)
+            activation=None)
     
-    conv4 = tf.layers.conv1d(
-            inputs=shaped,
-            filters=64,
-            kernel_size=320, # 2.5 words # Each word is 128, so * 2 are 2-9mers
-            strides=128, # Stride of 1 word
-            padding="same",
-            name="Conv4",
-            activation=tf.sigmoid)
+    # It took some work
+    # This conv4 layer now gives output of -1,3,3,32
+    # Which lets avg_pool4 and concat receive acceptable shapes...
+#    conv4 = tf.layers.conv2d(
+#            inputs=input_layer,
+#            filters=32,
+#            kernel_size=[3, 32], 
+#            strides=6, 
+#            padding="same",
+#            name="Conv4",
+#            activation=None)
 
+#    print(tf.shape(conv4))
     
-#    avg_pool1 = tf.layers.average_pooling1d(conv1, pool_size=4, strides=2, padding="same", name="AvgPooling_1")
-#    avg_pool2 = tf.layers.average_pooling1d(conv2, pool_size=4, strides=2, padding="same", name="AvgPooling_2")
-#    avg_pool3 = tf.layers.average_pooling1d(conv3, pool_size=4, strides=2, padding="same", name="AvgPooling_3")
+    avg_pool1 = tf.layers.average_pooling2d(conv1, pool_size=[4, 32], strides=[2,16], padding="same", name="AvgPooling_1")
+    avg_pool2 = tf.layers.average_pooling2d(conv2, pool_size=[4, 32], strides=[2,16], padding="same", name="AvgPooling_2")
+    avg_pool3 = tf.layers.average_pooling2d(conv3, pool_size=[4, 32], strides=[2,16], padding="same", name="AvgPooling_3")
+#    avg_pool4 = tf.layers.average_pooling2d(conv4, pool_size=[1, 16], strides=[1, 8], padding="same", name="AvgPooling_4")
+    
+#    print(tf.shape(avg_pool4))
+    
     
 #    pool1 = tf.layers.max_pooling1d(conv1, pool_size=4, strides=2, padding="same", name="Pool1")
 #    pool2 = tf.layers.max_pooling1d(conv2, pool_size=4, strides=2, padding="same", name="Pool2")
@@ -493,8 +500,9 @@ def cnn_model_fn(features, labels, mode):
 #    pool4 = tf.layers.max_pooling1d(conv4, pool_size=4, strides=2, padding="same", name="Pool4")
     
 #    all_pools = tf.concat([pool1, pool2, pool3, pool4], 2)
-    all_pools = tf.concat([conv1, conv2, conv3, conv4], 1)
-    flatten = tf.reshape(all_pools, [-1, 256])
+    #all_pools = tf.concat([conv1, conv2, conv3, conv4], 1)
+    all_pools = tf.concat([avg_pool1, avg_pool2, avg_pool3], 1) # avg_pool4 is removed
+    flatten = tf.reshape(all_pools, [-1, 3 * 3 * 32 * 3])
 
     
     #conv1_img = tf.unstack(conv1, axis=3)
@@ -532,20 +540,28 @@ def cnn_model_fn(features, labels, mode):
     # So -1, 4, 32, 64
     # pool2_flat = tf.reshape(avg_pool1, [-1, 2048]) # 4 * 32 * 64 = 8192
     
-    # 1,024 neurons
+    # 2,048 neurons
     dropout1 = tf.layers.dropout(inputs=flatten, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
 
-    dense = tf.layers.dense(inputs=dropout1, units=2048, activation=tf.nn.relu)
+    dense = tf.layers.dense(inputs=dropout1, units=2048, activation=None)
+    
+    dropout2 = tf.layers.dropout(inputs=dense, rate=0.2, training=mode == tf.estimator.ModeKeys.TRAIN)
 
-    dense2 = tf.layers.dense(input=dense, units=1024, activation=tf.nn.relu)
+    dense2 = tf.layers.dense(inputs=dropout2, units=1024, activation=tf.nn.relu)
+    
+    dropout3 = tf.layers.dropout(inputs=dense, rate=0.2, training=mode == tf.estimator.ModeKeys.TRAIN)
+    
+    dense3 = tf.layers.dense(inputs=dropout3, units=512, activation=tf.nn.relu)
 
     _add_layer_summary(dense, "Dense")
+    _add_layer_summary(dense2, "Dense2")
+    _add_layer_summary(dense3, "Dense3")
     
     # 0.5 is suggested for CNNs
     # 0.2 makes the system memorize the data
     # Trying 0.4, may switch to 0.3 or 0.5 again.
     dropout = tf.layers.dropout(
-            inputs=dense, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
+            inputs=dense3, rate=0.2, training=mode == tf.estimator.ModeKeys.TRAIN)
     
     # Must have len(replicons_list) neurons
     logits = tf.layers.dense(inputs=dropout, units=len(replicons_list))
@@ -554,8 +570,7 @@ def cnn_model_fn(features, labels, mode):
 
     predictions = {
             "classes": tf.argmax(input=logits, axis=1),
-             "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
-             }
+            "probabilities": tf.nn.softmax(logits, name="softmax_tensor")}
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
@@ -581,7 +596,7 @@ def cnn_model_fn(features, labels, mode):
     
     # Configure the Training Op (for TRAIN mode)
     if mode == tf.estimator.ModeKeys.TRAIN:
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.002)
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
         train_op = optimizer.minimize(
                 loss=loss,
                 global_step=tf.train.get_global_step())
@@ -595,8 +610,7 @@ def cnn_model_fn(features, labels, mode):
     return tf.estimator.EstimatorSpec(
             mode=mode, 
             loss=loss, 
-            eval_metric_ops=eval_metric_ops, 
-            summary_op=tf.summary.merge_all())
+            eval_metric_ops=eval_metric_ops)
     
 def main(unused_argv):
     classifier = tf.estimator.Estimator(
